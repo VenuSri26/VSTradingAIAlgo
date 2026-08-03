@@ -1,0 +1,73 @@
+import type { LiveDecisionResponse } from "../types/decision";
+import type { AgentRegistry, DecisionReplay, DeploymentSnapshot, LogEntry, OperationalAlert, OperationsSystem, PaperAnalytics, PaperPortfolioSummary, PaperTrade, ReplayListItem, RiskStatus, StrategyLabResult, SystemMetrics, TradeSetup, TradeTimeline, VersionInfo, ZerodhaHealth, ReleaseCertificate, DecisionExplanation, InstitutionalFlowSummary, InstitutionalFlowTrend, InstitutionalFlowPoint, DecisionIntelligence, AICommandCenter } from "../types/operations";
+
+const BASE_URL =
+  import.meta.env.VITE_API_BASE_URL?.trim() || window.location.origin;
+
+async function requestJSON<T>(path: string, init?: RequestInit, timeoutMs = 8000): Promise<T> {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${BASE_URL}${path}`, { ...init, signal: controller.signal });
+    if (!res.ok) {
+      let detail = `${res.status} ${res.statusText}`;
+      try { const body = await res.json(); detail = body.detail ?? detail; } catch { /* ignore */ }
+      throw new Error(detail);
+    }
+    return await res.json() as T;
+  } finally { window.clearTimeout(timeout); }
+}
+function adminHeaders(token: string): HeadersInit { return { "Content-Type": "application/json", "X-Admin-Token": token }; }
+
+export const api = {
+  getLiveDecision: () => requestJSON<LiveDecisionResponse>("/api/decision/live"),
+  getAnalyticsSession: () => requestJSON<Record<string, unknown>>("/api/analytics/session"),
+  getPaperAnalytics: () => requestJSON<PaperAnalytics>("/api/analytics/paper"),
+  getReplays: () => requestJSON<{replays: ReplayListItem[]}>("/api/replay?limit=50"),
+  getReplay: (tradeId: number) => requestJSON<DecisionReplay>(`/api/replay/${tradeId}`),
+  getMetrics: () => requestJSON<SystemMetrics>("/api/system/metrics"),
+  getAlerts: () => requestJSON<{alerts: OperationalAlert[]}>("/api/system/alerts?limit=10"),
+  getVersion: () => requestJSON<VersionInfo>("/api/system/version"),
+  getReleaseCertificate: () => requestJSON<ReleaseCertificate>("/api/system/release-certificate"),
+  getDecisionExplanation: () => requestJSON<DecisionExplanation>("/api/decision/explain"),
+  getZerodhaHealth: () => requestJSON<ZerodhaHealth>("/api/system/zerodha-health"),
+  getSetups: (status?: string) => requestJSON<{setups: TradeSetup[]}>(`/api/setups?limit=20${status ? `&status=${encodeURIComponent(status)}` : ""}`),
+  reviewSetup: (id: number, status: "APPROVED"|"REJECTED"|"EXPIRED"|"CANCELLED", note: string, token: string) =>
+    requestJSON<TradeSetup>(`/api/setups/${id}/review`, { method: "POST", headers: adminHeaders(token), body: JSON.stringify({status, note}) }),
+  getPaperTrades: () => requestJSON<{trades: PaperTrade[]}>("/api/paper/trades?limit=20"),
+  executePaper: (setup_id: number, entry_price: number, quantity: number | undefined, token: string) =>
+    requestJSON<Record<string, unknown>>("/api/paper/execute", { method: "POST", headers: adminHeaders(token), body: JSON.stringify({setup_id, entry_price, ...(quantity ? {quantity} : {})}) }),
+  monitorPaper: (current_price: number, force_eod: boolean, token: string) =>
+    requestJSON<Record<string, unknown>>("/api/paper/monitor", { method: "POST", headers: adminHeaders(token), body: JSON.stringify({current_price, force_eod}) }),
+  getPaperPortfolio: () => requestJSON<PaperPortfolioSummary>("/api/paper/portfolio"),
+  getTradeTimeline: (tradeId: number) => requestJSON<TradeTimeline>(`/api/paper/trades/${tradeId}/timeline`),
+  closePaper: (close_price: number, reason: string, token: string) =>
+    requestJSON<PaperTrade>("/api/paper/close", { method: "POST", headers: adminHeaders(token), body: JSON.stringify({close_price, reason}) }),
+  getRiskStatus: () => requestJSON<RiskStatus>("/api/risk/status"),
+  setKillSwitch: (enabled: boolean, reason: string | null, token: string) =>
+    requestJSON<Record<string, unknown>>("/api/risk/kill-switch", { method: "POST", headers: adminHeaders(token), body: JSON.stringify({enabled, reason}) }),
+  getOperationsSystem: () => requestJSON<OperationsSystem>("/api/operations/system"),
+  getOperationsLogs: () => requestJSON<{path:string; exists:boolean; entries:LogEntry[]}>("/api/operations/logs?limit=100"),
+  getDeployments: () => requestJSON<DeploymentSnapshot>("/api/operations/deployments"),
+  getAgentRegistry: () => requestJSON<AgentRegistry>("/api/agents/registry"),
+  getStrategySample: () => requestJSON<Record<string, unknown>>("/api/strategy-lab/sample"),
+  validateStrategy: (payload: Record<string, unknown>) => requestJSON<StrategyLabResult>("/api/strategy-lab/validate", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(payload) }, 30000),
+  getOptionChainSummary: () => requestJSON<any>("/api/option-chain/summary"),
+  getOptionChainLive: () => requestJSON<any>("/api/option-chain/live"),
+  getInstitutionalFlow: () => requestJSON<InstitutionalFlowSummary>("/api/institutional-flow/summary"),
+  getInstitutionalFlowTrend: () => requestJSON<InstitutionalFlowTrend>("/api/institutional-flow/trend?limit=120"),
+  getInstitutionalFlowAnomalies: () => requestJSON<{anomalies:InstitutionalFlowPoint[]}>("/api/institutional-flow/anomalies?limit=20"),
+  getDecisionIntelligence: () => requestJSON<DecisionIntelligence>("/api/decision/intelligence"),
+  getAICommandCenter: () => requestJSON<AICommandCenter>("/api/ai-command-center"),
+  getMarketRegimeIntelligence: () => requestJSON<any>("/api/market-regime/intelligence"),
+  getGammaIntelligence: () => requestJSON<any>("/api/gamma/intelligence"),
+  getLiveDataStatus: () => requestJSON<any>("/api/live-data/status"),
+  refreshLiveData: (token: string) => requestJSON<any>("/api/live-data/refresh", {method:"POST", headers:adminHeaders(token)}),
+  pollLiveData: (token: string) => requestJSON<any>("/api/live-data/poll", {method:"POST", headers:adminHeaders(token)}),
+  syncInstruments: (token: string) => requestJSON<any>("/api/live-data/instruments/sync", {method:"POST", headers:adminHeaders(token)}),
+  getLiveCandles: () => requestJSON<any>("/api/live-data/candles"),
+  getSecurityStatus: () => requestJSON<any>("/api/security/status"),
+  getExecutionOrders: () => requestJSON<any>("/api/execution/orders"),
+  previewOrder: (payload: Record<string, unknown>, token: string) => requestJSON<any>("/api/execution/preview", {method:"POST", headers:adminHeaders(token), body:JSON.stringify(payload)}),
+  confirmOrder: (preview_id: string, confirmation_text: string, token: string) => requestJSON<any>("/api/execution/confirm", {method:"POST", headers:adminHeaders(token), body:JSON.stringify({preview_id, confirmation_text})}),
+};

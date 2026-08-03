@@ -1,0 +1,11 @@
+VSTradingAI 2.7.0 RC2 validation
+- Built from cumulative V2.7.0 RC1 source: PASS
+- Python compilation: PASS
+- Backend pytest: 57 passed
+- New history/anomaly tests: 3 passed
+- Shell script syntax: PASS
+- Root/frontend version alignment: PASS
+- Frontend production build: NOT RUN in this workspace because the internal npm mirror returns 404 for @types/react-dom@18.3.0; AWS installer remains the mandatory build gate.
+- Database migration: CREATE TABLE IF NOT EXISTS at runtime; backward compatible
+- Existing modules removed: NO
+- Live Zerodha orders: DISABLED

@@ -1,0 +1,9 @@
+VSTradingAI 2.2.0 RC2 Validation
+
+Python compilation: PASS
+Pytest: 33 passed
+Legacy verification scripts: PASS
+Shell syntax: PASS
+Unsafe localhost source scan: PASS
+Live Zerodha order execution: DISABLED
+Frontend build: Must run on AWS via npm ci && npm run build (registry unavailable in workspace)

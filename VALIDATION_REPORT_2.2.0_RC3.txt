@@ -1,0 +1,13 @@
+VSTradingAI 2.2.0-rc.3 Validation Report
+Date: 2026-08-03
+
+Python compilation: PASS
+Pytest: 35 passed
+Legacy verification checks: 88 passed
+Shell script syntax: PASS
+New API route registration: PASS
+Unsafe localhost source scan: PASS
+Version consistency: PASS
+Automatic Zerodha execution: DISABLED
+
+Frontend local production build: NOT RUN in this workspace because node_modules are intentionally excluded and external npm package retrieval is unavailable. AWS staged deployment runs npm ci and npm run build as mandatory gates.

@@ -1,0 +1,27 @@
+VSTradingAI 2.2.0 RC1 Validation Report
+Date: 2026-08-03
+
+IMPLEMENTED
+- Responsive application shell and navigation.
+- Market Overview, Trading, Portfolio, Analytics, Operations, and Settings workspaces.
+- Paper portfolio summary and journal table.
+- Operations Console retained as a dedicated workspace.
+- Exact frontend dependency pins and synchronized version metadata.
+- Existing trading logic and Zerodha interfaces preserved.
+
+VALIDATION COMPLETED
+- Backend Python compilation: PASS
+- Backend pytest: PASS (30 tests)
+- Unsafe localhost:8000 source scan: PASS
+- Shell script syntax: PASS
+- Root/frontend/package-lock version consistency: PASS
+- Temporary backup/editor files removed: PASS
+
+FRONTEND BUILD
+- Not completed in this workspace because the internal npm registry returned 404 for @types/react-dom@18.3.0.
+- AWS deployment must run `npm ci` and `npm run build` before candidate promotion.
+- The staged installer remains the release gate and must reject any failed frontend build.
+
+SAFETY
+- Automatic live Zerodha order execution remains disabled.
+- Protected paper actions continue to require X-Admin-Token.

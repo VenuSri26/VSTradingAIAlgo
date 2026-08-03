@@ -1,0 +1,11 @@
+VSTradingAI 2.6.0 RC1 Validation
+================================
+Baseline: V2.5.0 RC1 corrected cumulative release
+Python compilation: PASS
+Backend pytest: 48 passed
+Option-chain intelligence tests: PASS (3)
+Version alignment: 2.6.0-rc.1
+Automatic live orders: DISABLED
+Frontend source integration: COMPLETE
+Frontend production build in this workspace: NOT RUN (internal npm registry lacks @types/react-dom@18.3.0)
+AWS installer retains npm install/build as mandatory candidate gate.

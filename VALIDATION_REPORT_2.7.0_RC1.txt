@@ -1,0 +1,22 @@
+VSTradingAI V2.7.0 RC1 Validation Report
+
+Baseline: V2.6.0 RC2 cumulative release
+Version: 2.7.0-rc.1
+
+Validation performed:
+- Python compileall: PASS
+- Backend pytest: 54 passed
+- New institutional-flow tests: 3 passed
+- Shell syntax: PASS
+- Version consistency: PASS
+- Existing modules retained: YES
+- Live order submission: DISABLED
+- Frontend build: NOT RUN in this workspace because the internal npm mirror lacks @types/react-dom@18.3.0; AWS installer remains the mandatory frontend build gate.
+
+New endpoints:
+- GET /api/institutional-flow/summary
+- POST /api/institutional-flow/analyse
+- GET /api/institutional-flow/buildup
+
+Safety note:
+No FII/DII or index-futures data is fabricated. Missing feeds are represented as unavailable with zero confidence and visible warnings.

@@ -1,0 +1,24 @@
+VSTradingAI 2.5.0-rc.1 Validation Report
+
+Baseline: V2.4.0-STABLE-source.tar.gz
+Python compilation: PASS
+Formal pytest suite: 44 passed
+Shell syntax: PASS
+Version synchronization: PASS (root/frontend 2.5.0-rc.1)
+Unsafe localhost:8000 source scan: PASS
+Frontend npm install/build in this workspace: NOT RUN - internal npm registry does not contain @types/react-dom@18.3.0
+AWS installer frontend gates: npm install/npm run build remain mandatory
+Live Zerodha order submission: DISABLED
+Automatic broker execution added: NO
+Database migration: NONE
+
+New tests:
+- 3-minute OHLC aggregation
+- Successful market-data poll
+- Instrument synchronization
+- Failure safe-NO_TRADE behavior
+
+Deployment regression fix:
+- VERSION file is authoritative over stale APP_VERSION in shared backend.env.
+- Installer aligns APP_VERSION automatically and explicitly for candidate startup.
+- Added regression test test_version_source_of_truth.py.

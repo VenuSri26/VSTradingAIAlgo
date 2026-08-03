@@ -1,0 +1,10 @@
+VSTradingAI 2.4.0 RC1 validation
+================================
+Python compilation: PASS
+Backend pytest: 41 passed
+Shell syntax: PASS
+New route source scan: PASS
+Live broker submission default: DISABLED
+Frontend source integration: PASS by static inspection
+Frontend production build in this workspace: NOT RUN because internal npm mirror lacks @types/react-dom@18.3.0
+AWS npm build gate remains mandatory.

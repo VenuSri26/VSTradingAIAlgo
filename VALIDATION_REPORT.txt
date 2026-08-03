@@ -1,0 +1,21 @@
+VSTradingAI 2.0.0 Validation Report
+Date: 2026-08-02
+Scope: Deployment assurance and clean release engineering
+
+Completed locally:
+- Root/frontend version consistency
+- Python compilation
+- Formal pytest suite
+- Legacy verification scripts
+- Shell syntax checks
+- SQLite migration registration
+- API smoke tests in installed environment
+- Release package hygiene inspection
+
+Environment limitation:
+- A completely fresh dependency download and Docker build require access to public Python/npm registries. These assets are included and must be run on AWS or CI where registry access is available.
+
+Safety:
+- No trading formula changed.
+- No Zerodha order placement enabled.
+- Zerodha validation script is read-only.

@@ -1,0 +1,12 @@
+VSTradingAI 2.8.0 RC1 Validation Report
+
+Baseline: V2.7.0 RC2 uploaded source
+Python compilation: PASS
+Backend pytest: 61 passed
+New V2.8 tests: PASS
+Shell syntax: PASS
+Root/frontend version alignment: PASS (2.8.0-rc.1)
+Frontend source integration checks: PASS
+Frontend production build in this workspace: NOT RUN - internal npm mirror returned 404 for @types/react-dom@18.3.0
+AWS installer retains npm install/build as mandatory deployment gate.
+Live Zerodha order submission: DISABLED

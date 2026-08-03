@@ -1,0 +1,11 @@
+VSTradingAI V2.6.0 RC2 Validation
+===================================
+Baseline: V2.6.0 RC1 cumulative package
+Python compile: PASS
+Backend pytest: 51 passed
+Shell syntax: PASS
+Version alignment: PASS (2.6.0-rc.2)
+Hardcoded UI badge scan: PASS
+Unsafe localhost source scan: PASS
+Live broker execution: DISABLED
+Frontend production build: MUST RUN ON AWS deployment gate

@@ -1,0 +1,33 @@
+VSTradingAI 2.3.0 RC1 Validation Report
+Date: 2026-08-03
+
+INCLUDED
+- Package 5: read-only Operations Console (resources, logs, deployment history, backups, metrics, Zerodha health)
+- Package 6: Multi-Agent registry and decision-bus workspace (agent families, votes, evidence, debate, supervisor output)
+- Package 7: Strategy Lab (JSON sample, next-bar replay, conservative same-bar handling, costs/slippage, walk-forward splits)
+
+PASSED
+- Python compilation
+- Pytest: 38 passed
+- Legacy verification checks: 88 passed
+- API smoke tests for all new routes
+- Strategy Lab JSON serialization and validation
+- Shell syntax checks
+- Source scan: no localhost:8000 production fallback
+- Version synchronization: 2.3.0-rc.1
+
+LIMITATION
+- Frontend npm build could not run in the OpenAI workspace because its private npm mirror lacks @types/react-dom@18.3.0.
+- AWS installer retains mandatory npm ci and npm run build gates using normal registry access.
+
+SAFETY
+- Live Zerodha order placement remains disabled.
+- Operations APIs are read-only.
+- Strategy Lab is RESEARCH_ONLY and never changes production configuration.
+
+PENDING / NEXT
+- Zerodha historical-data import and CSV upload workflow for Strategy Lab.
+- Persistent strategy experiment catalogue and certification states.
+- Notification adapters.
+- Live Zerodha WebSocket market feed hardening.
+- Manual order preview, idempotency and reconciliation before any execution feature.
