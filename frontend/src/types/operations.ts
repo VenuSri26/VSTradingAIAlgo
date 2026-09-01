@@ -101,3 +101,25 @@ export interface AICommandCenter {
   institutional_flow:InstitutionalFlowSummary|null; why:string[]; why_not:string[];
   invalidation_conditions:string[]; execution_mode:string; live_orders_enabled:boolean;
 }
+
+export interface ProductionCandidateRule { code:string; label:string; passed:boolean; weight:number; detail:string; }
+export interface ProductionCandidateStatus {
+  version:VersionInfo; status:string; readiness_score:number; execution_mode:string; live_orders_enabled:boolean;
+  rules:ProductionCandidateRule[]; blockers:ProductionCandidateRule[]; paper_performance:AnalyticsSummary;
+  risk:RiskStatus; release_health_score:number; next_action:string;
+}
+
+export interface ResilienceCheck { code:string; label:string; status:"PASS"|"WARN"|"FAIL"; detail:string; blocking:boolean; }
+export interface ResilienceStatus {
+  version:VersionInfo; overall:"READY"|"DEGRADED"|"BLOCKED"; resilience_score:number; restart_safe:boolean;
+  paper_only:boolean; checks:ResilienceCheck[]; blocking_issues:ResilienceCheck[]; warning_count:number;
+  recommended_action:string; generated_at:string;
+}
+
+export interface PaperManagementState {
+  trade_id:number; original_quantity:number; remaining_quantity:number; realized_quantity:number;
+  realized_gross_pnl:number; realized_costs:number; highest_price:number; active_stop_loss:number;
+  partial_target_done:number; breakeven_armed:number; trailing_enabled:number;
+  trail_distance_pct:number; last_action:string; updated_at:string;
+}
+export interface OpenPaperManagement { trade:PaperTrade|null; management:PaperManagementState|null; execution_mode?:string; }

@@ -1,0 +1,10 @@
+VSTradingAI V5.8.0 RC1 Validation Report
+Baseline: V5.7.0 RC1 cumulative release
+Version: 5.8.0-rc.1
+Python compile: PASS
+Backend pytest: 100 passed
+New KiteTicker runtime tests: 4 passed
+Deployment script syntax: PASS
+Frontend source integration: PASS (AWS build gate required)
+Live broker orders: DISABLED
+Human approval: REQUIRED

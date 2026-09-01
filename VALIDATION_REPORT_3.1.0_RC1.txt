@@ -1,0 +1,11 @@
+VSTradingAI 3.1.0 RC1 Validation
+================================
+Baseline: 3.0.0-rc.1
+Version alignment: PASS (3.1.0-rc.1)
+Python compilation: PASS
+Backend tests: PASS (68 passed)
+Deployment shell syntax: PASS
+Frontend source integration: PASS
+Frontend build in this workspace: BLOCKED by internal npm mirror missing @types/react-dom@18.3.0
+AWS build gate: REQUIRED (npm install && npm run build)
+Live orders: DISABLED by default

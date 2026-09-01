@@ -65,34 +65,25 @@ def _option_price(data_source: Any, trade: dict[str, Any]) -> tuple[float, str |
 
 
 def _close_if_required(trade: dict[str, Any], current_price: float, force_eod: bool = False) -> dict[str, Any]:
-    reason = status = None
-    if force_eod:
-        reason, status = "END_OF_DAY", "CLOSED_EOD"
-    elif current_price <= float(trade["stop_loss"]):
-        reason, status = "STOP_LOSS", "CLOSED_SL"
-    elif trade.get("target_2") and current_price >= float(trade["target_2"]):
-        reason, status = "TARGET_2", "CLOSED_TARGET_2"
-    elif trade.get("target_1") and current_price >= float(trade["target_1"]):
-        reason, status = "TARGET_1", "CLOSED_TARGET_1"
-
-    if not status:
-        unrealized = round((current_price - trade["entry_price"]) * trade["quantity"], 2)
-        store.record_paper_monitor_event(trade["id"], current_price, "HOLD", None)
-        return {"action": "HOLD", "trade_id": trade["id"], "current_price": current_price,
-                "unrealized_pnl": unrealized}
-
-    turnover = (trade["entry_price"] + current_price) * trade["quantity"]
-    estimated_costs = turnover * settings.paper_cost_rate
-    closed = store.close_paper_trade(trade["id"], current_price, status, estimated_costs, reason)
-    if closed is None:
-        return {"action": "ALREADY_CLOSED", "trade_id": trade["id"]}
-    store.record_trade_result(closed["net_pnl"], "B")
-    store.record_paper_monitor_event(trade["id"], current_price, "CLOSED", reason)
-    event = {"event": "PAPER_TRADE_CLOSED", "trade_id": trade["id"], "status": status,
-             "reason": reason, "close_price": current_price, "net_pnl": closed["net_pnl"]}
-    _write_notification(event)
-    record_alert("INFO", "PAPER_TRADE_CLOSED", f"Paper trade {trade['id']} closed: {reason}")
-    return {"action": "CLOSED", **closed}
+    from app.paper_trade_management import evaluate
+    result = evaluate(trade, current_price, force_eod=force_eod)
+    detail = ",".join(result.get("actions") or []) or result.get("reason")
+    store.record_paper_monitor_event(trade["id"], current_price, result["action"], detail)
+    if result["action"] == "CLOSED":
+        closed = result
+        if closed.get("net_pnl") is not None:
+            store.record_trade_result(closed["net_pnl"], "B")
+        event = {"event": "PAPER_TRADE_CLOSED", "trade_id": trade["id"],
+                 "status": closed.get("status"), "reason": closed.get("reason"),
+                 "close_price": current_price, "net_pnl": closed.get("net_pnl")}
+        _write_notification(event)
+        record_alert("INFO", "PAPER_TRADE_CLOSED", f"Paper trade {trade['id']} closed: {closed.get('reason')}")
+    elif result["action"] == "MANAGED":
+        _write_notification({"event": "PAPER_TRADE_MANAGED", "trade_id": trade["id"],
+                             "actions": result.get("actions"), "current_price": current_price,
+                             "remaining_quantity": result.get("remaining_quantity"),
+                             "active_stop_loss": result.get("active_stop_loss")})
+    return result
 
 
 def monitor_once(data_source: Any, now: datetime | None = None) -> dict[str, Any]:

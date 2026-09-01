@@ -1,0 +1,11 @@
+VSTradingAI V6.5.0 RC1 validation
+================================
+Baseline: V6.4.0 RC1
+Version: 6.5.0-rc.1
+Backend pytest: 126 passed
+New V6.5 tests: 4 passed
+Python compilation: PASS
+Shell syntax: PASS
+Frontend source integration: PASS
+Local frontend build: NOT RUN - React/Vite dependencies unavailable in packaging environment
+Live orders enabled: FALSE

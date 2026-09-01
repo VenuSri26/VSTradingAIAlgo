@@ -1,0 +1,11 @@
+V6.4.0 RC1 validation
+=====================
+Baseline: V6.3.0 RC1
+Version: 6.4.0-rc.1
+Backend tests: 122 passed
+New scheduler tests: 4 passed
+Python compilation: PASS
+Shell syntax: PASS
+Frontend source integration: PASS
+Frontend production build: AWS deployment gate
+Live orders enabled: NO

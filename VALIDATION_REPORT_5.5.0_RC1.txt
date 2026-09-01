@@ -1,0 +1,6 @@
+V5.5.0 RC1 validation
+Backend tests: 90 passed
+Python compilation: PASS
+Shell syntax: PASS
+Frontend build: SKIPPED (AWS installer remains final gate)
+Live orders: DISABLED

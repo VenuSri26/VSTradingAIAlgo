@@ -1,0 +1,2 @@
+{"alerts": [{"action": "BLOCK_TRADING", "code": "STALE_MARKET_DATA", "message": "Market data is stale by 23061.6 seconds", "severity": "CRITICAL"}], "critical_count": 1, "evaluated_at": "2026-08-10T18:05:35.567891+00:00", "status": "BLOCKED", "warning_count": 0}
+{"alerts": [{"action": "BLOCK_TRADING", "code": "STALE_MARKET_DATA", "message": "Market data is stale by 23699.6 seconds", "severity": "CRITICAL"}], "critical_count": 1, "evaluated_at": "2026-08-10T18:16:13.620737+00:00", "status": "BLOCKED", "warning_count": 0}

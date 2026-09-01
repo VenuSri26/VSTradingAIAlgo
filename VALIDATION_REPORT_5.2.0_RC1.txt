@@ -1,0 +1,11 @@
+V5.2.0 RC1 VALIDATION
+======================
+Baseline: V5.1.0 RC1
+Version: 5.2.0-rc.1
+Python compilation: PASS
+Backend pytest: 79 passed
+New live-to-paper bridge tests: 3 passed
+Shell syntax: PASS
+Frontend source integration: PASS (AWS build remains deployment gate)
+Live broker orders: DISABLED
+Human approval before paper execution: REQUIRED

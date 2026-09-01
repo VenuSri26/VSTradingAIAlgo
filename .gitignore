@@ -1,45 +1,36 @@
-# Secrets
 .env
-.env.*
+*.env
 !.env.example
-backend/.env
+
+.venv/
+node_modules/
+dist/
+_pycache_/
+.pytest_cache/
+*.pyc
+*.log
+
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+data/*.jsonl
+
 *.pem
 *.key
-*.ppk
+*.crt
 
-# Python
-.venv/
-venv/
-_pycache_/
-*.py[cod]
-.pytest_cache/
-.coverage
-htmlcov/
-
-# Node
-node_modules/
-frontend/node_modules/
-dist/
-frontend/dist/
-
-# Runtime data
-data/
-*.db
-*.sqlite
-*.sqlite3
-*.jsonl
-*.log
-logs/
-backup/
-backups/
-
-# IDE and OS
-.vscode/
-.idea/
 .DS_Store
-Thumbs.db
 
-# Temporary files
-*.tmp
-*.bak
-*.swp
+# VSTradingAI private/runtime files
+.env
+*.env
+backend/.venv/
+frontend/node_modules/
+_pycache_/
+*.pyc
+access_token
+request_token
+*.log
+
+# Generated market-data runtime files
+backend/data/tick_bridge.jsonl

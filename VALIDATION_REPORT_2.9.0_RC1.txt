@@ -1,0 +1,7 @@
+VSTradingAI V2.9.0 RC1 Validation
+Baseline: V2.8.0 RC1
+Backend pytest: 64 passed
+Python compilation/import: passed through pytest collection
+Frontend build: pending AWS (internal npm registry lacks @types/react-dom@18.3.0)
+Live order execution: disabled
+Automatic agent weight updates: disabled

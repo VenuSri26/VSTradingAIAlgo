@@ -363,3 +363,9 @@ Create a clean distributable with `./package_release.sh`. Runtime databases, log
 - **Strategy Lab:** conservative research-only replay using pasted JSON candle/signal data.
 
 No workspace can place a live Zerodha order.
+
+## V5.9 Runtime Maintenance
+
+V5.9 adds periodic active-expiry subscription refresh, expiry rollover detection,
+market-session-aware heartbeat behavior, and persistent token/runtime notifications.
+Live broker order placement remains disabled.

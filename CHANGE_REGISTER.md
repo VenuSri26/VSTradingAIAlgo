@@ -197,3 +197,14 @@ Approver / verifier:
 | CHG-2702-02 | Decision Engine | Add flow-adjusted decision intelligence endpoint | Surface confirmation/conflict without changing order logic | 57 tests | AWS pending | Complete |
 | CHG-2702-03 | Replay | Attach nearest institutional-flow evidence | Improve post-trade evidence review | 57 tests | AWS pending | Complete |
 | CHG-2702-04 | Frontend | Add flow trend/anomaly dashboard | Make session changes visible | Backend validated; AWS build pending | AWS pending | Complete |
+
+## 5.1.0-rc.1
+- Added restart-safe SQLite persistence for live option-chain intelligence.
+- Added intraday PCR, CE OI and PE OI history/trend APIs.
+- Added OI trend visualization to the Live Intelligence workspace.
+- Added migration 006_live_intelligence_history.sql and regression tests.
+
+### V6.8.0 RC1
+- Multi-session certification evidence gate.
+- Certification report notification outbox integration.
+- Four new backend tests; full suite 137 passed.

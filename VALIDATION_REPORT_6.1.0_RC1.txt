@@ -1,0 +1,19 @@
+VSTradingAI V6.1.0 RC1 Validation Report
+=========================================
+Baseline: V6.0.0 RC1
+Version: 6.1.0-rc.1
+
+Automated validation:
+- Python compilation: PASS
+- Backend pytest: PASS (110 tests)
+- New V6.1 tests: PASS (3 tests)
+- Shell script syntax: PASS
+- Root/frontend version alignment: PASS
+- Live order execution: DISABLED
+
+New test coverage:
+1. SMTP email notification delivery without webhook.
+2. JSON and CSV NSE holiday imports.
+3. Restart-safe broker Greeks history and session summary.
+
+AWS frontend build and post-deployment smoke tests remain deployment gates.

@@ -1,0 +1,9 @@
+V6.0.0 RC1 VALIDATION
+Baseline: V5.9.0 RC1 cumulative source
+Python compilation: PASS
+Backend pytest: 107 passed
+New V6 tests: 3 passed
+Shell syntax: PASS
+Frontend source integration: PASS
+Frontend production build: AWS deployment gate (node_modules not included in source archive)
+Live broker orders: DISABLED

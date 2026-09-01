@@ -9,6 +9,9 @@ const titles: Record<AppPage, { title: string; subtitle: string }> = {
   portfolio: { title: "Paper Portfolio", subtitle: "Open positions, journal and performance" },
   analytics: { title: "Analytics", subtitle: "Session metrics and decision quality" },
   operations: { title: "Operations Console", subtitle: "Health, alerts and protected paper controls" },
+  resilience: { title: "Operational Resilience", subtitle: "Restart recovery, persistence and safety status" },
+  scenarios: { title: "Test Scenarios", subtitle: "Deterministic release and safety validation" },
+  "live-intelligence": { title: "Live Intelligence", subtitle: "Broker data quality and option-chain readiness" },
   settings: { title: "Settings", subtitle: "Runtime and safety configuration guidance" },
   risk: { title: "Risk Supervisor", subtitle: "Capital protection and execution controls" },
   replay: { title: "Decision Replay", subtitle: "Review historical AI decisions and outcomes" },
@@ -16,6 +19,8 @@ const titles: Record<AppPage, { title: string; subtitle: string }> = {
   command: { title: "AI Command Center", subtitle: "Supervisor scoring, market regime and trade grading" },
   flow: { title: "Institutional Flow", subtitle: "Options, futures and FII/DII evidence quality" },
   strategy: { title: "Strategy Lab", subtitle: "Research, replay and validation workspace" },
+  learning: { title: "AI Learning", subtitle: "Calibration, agent reliability and walk-forward research" },
+  certification: { title: "Production Certification", subtitle: "Evidence gates for controlled deployment readiness" },
   production: { title: "Production", subtitle: "Live-data, security and execution readiness" },
 };
 

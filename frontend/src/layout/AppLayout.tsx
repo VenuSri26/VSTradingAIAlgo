@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { Header } from "./Header";
 import { Sidebar } from "./Sidebar";
 
-export type AppPage = "overview" | "trading" | "portfolio" | "risk" | "analytics" | "replay" | "agents" | "command" | "flow" | "strategy" | "operations" | "production" | "settings";
+export type AppPage = "overview" | "trading" | "portfolio" | "risk" | "analytics" | "replay" | "agents" | "command" | "flow" | "strategy" | "operations" | "production" | "learning" | "certification" | "resilience" | "scenarios" | "live-intelligence" | "settings";
 
 interface AppLayoutProps {
   activePage: AppPage;

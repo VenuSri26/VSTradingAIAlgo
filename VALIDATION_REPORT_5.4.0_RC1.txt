@@ -1,0 +1,19 @@
+V5.4.0 RC1 VALIDATION REPORT
+Baseline: V5.3.0 RC1
+Version: 5.4.0-rc.1
+
+Python compilation: PASS
+Backend pytest: 87 passed
+Deployment shell syntax: PASS
+Version alignment: PASS
+Live order submission: DISABLED
+Frontend source integration: PASS
+Frontend production build: AWS deployment gate
+
+New deterministic scenarios:
+- Regular NSE session with fresh authenticated feed => READY
+- NSE holiday => BLOCKED / NO_TRADE
+- Weekend => BLOCKED / NO_TRADE
+- Stale market timestamp => BLOCKED / NO_TRADE
+- WebSocket requested but unavailable => REST fallback warning
+- Naive exchange timestamp => interpreted as Asia/Kolkata and normalized to UTC

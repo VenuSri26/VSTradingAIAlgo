@@ -132,9 +132,25 @@ class ZerodhaDataSource(DataSource):
         if interval is None:
             raise DataUnavailable(f"Unsupported timeframe {timeframe}")
         try:
-            from_date = datetime.now(timezone.utc) - pd.Timedelta(minutes=lookback * 20 + 1440)
+            now = datetime.now(timezone.utc)
+
+            # Timeframe-aware historical warm-up.
+            # Intraday indicators need enough recent minutes plus a prior session.
+            # Daily candles need calendar-day history; using minutes here previously
+            # fetched only ~1 day and left zero completed daily candles after
+            # the no-lookahead filter removed today's forming candle.
+            if timeframe == "1d":
+                from_date = now - pd.Timedelta(days=max(lookback * 3, 15))
+            else:
+                from_date = now - pd.Timedelta(
+                    minutes=lookback * 20 + 1440
+                )
+
             candles = self._kite.historical_data(
-                NIFTY_INSTRUMENT_TOKEN, from_date, datetime.now(timezone.utc), interval
+                NIFTY_INSTRUMENT_TOKEN,
+                from_date,
+                now,
+                interval,
             )
         except Exception as e:
             raise DataUnavailable(f"Zerodha historical_data failed: {e}") from e

@@ -13,6 +13,11 @@ import { StrategyLabPage } from "./pages/StrategyLabPage";
 import { ProductionPage } from "./pages/ProductionPage";
 import { InstitutionalFlowPage } from "./pages/InstitutionalFlowPage";
 import { AICommandCenterPage } from "./pages/AICommandCenterPage";
+import { LearningPage } from "./pages/LearningPage";
+import { ProductionCandidatePage } from "./pages/ProductionCandidatePage";
+import { ResiliencePage } from "./pages/ResiliencePage";
+import { TestScenariosPage } from "./pages/TestScenariosPage";
+import { LiveIntelligencePage } from "./pages/LiveIntelligencePage";
 
 export default function App() {
   const [page, setPage] = useState<AppPage>("overview");
@@ -37,6 +42,16 @@ export default function App() {
         return <InstitutionalFlowPage />;
       case "strategy":
         return <StrategyLabPage />;
+      case "learning":
+        return <LearningPage />;
+      case "certification":
+        return <ProductionCandidatePage />;
+      case "resilience":
+        return <ResiliencePage />;
+      case "scenarios":
+        return <TestScenariosPage />;
+      case "live-intelligence":
+        return <LiveIntelligencePage />;
       case "operations":
         return <OperationsPage />;
       case "production":

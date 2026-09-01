@@ -1,0 +1,10 @@
+Release: 6.3.0-rc.1
+Baseline: 6.2.0-rc.1
+Backend tests: 118 passed
+New V6.3 tests: 4 passed
+Python compilation: PASS
+Deployment shell syntax: PASS
+Frontend source integration: PASS
+Local frontend build: NOT RUN — internal npm registry missing @types/react-dom@18.3.0
+Live broker orders: DISABLED
+Human approval: REQUIRED

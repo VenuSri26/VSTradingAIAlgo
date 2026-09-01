@@ -1,0 +1,10 @@
+VSTradingAI 3.0.0 RC1 validation
+
+Baseline: V2.9.0 RC1 cumulative source
+Backend pytest: 66 passed
+Python compilation: PASS
+Deployment shell syntax: PASS
+Version alignment: 3.0.0-rc.1
+Live broker orders: DISABLED
+Frontend source integration: PASS
+Frontend local build: NOT RUN in packaging environment because internal npm mirror lacks @types/react-dom@18.3.0; AWS installer enforces npm install and npm run build before cutover.

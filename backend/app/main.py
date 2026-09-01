@@ -33,6 +33,12 @@ async def lifespan(app: FastAPI):
 
     monitor_task = None
     market_data_task = None
+    kite_runtime_task = None
+    runtime_maintenance_task = None
+    notification_scheduler_task = None
+    daily_digest_scheduler_task = None
+    live_session_recorder_task = None
+    certification_eod_task = None
     from app.routes import get_data_source
     if settings.paper_auto_monitor_enabled:
         from app.paper_monitor import run_monitor_loop
@@ -46,16 +52,44 @@ async def lifespan(app: FastAPI):
             settings.kite_websocket_requested,
         )
         market_data_task = asyncio.create_task(supervisor.run(get_data_source))
+    if settings.is_live() and settings.kite_websocket_requested:
+        from app.kite_ticker_runtime import get_kite_ticker_runtime
+        runtime = get_kite_ticker_runtime()
+        runtime.start()
+        kite_runtime_task = asyncio.create_task(runtime.monitor_loop())
+        from app.runtime_maintenance import get_runtime_maintenance
+        from app.market_safety_routes import get_market_safety_status
+        runtime_maintenance_task = asyncio.create_task(get_runtime_maintenance().run_loop(get_data_source, runtime, get_market_safety_status))
+    if settings.notification_dispatch_enabled:
+        from app.integration_readiness_routes import _scheduler
+        notification_scheduler_task = asyncio.create_task(_scheduler.run_loop())
+    if settings.daily_digest_enabled:
+        from app.integration_readiness_routes import _daily_digest_scheduler
+        daily_digest_scheduler_task = asyncio.create_task(_daily_digest_scheduler.run_loop())
+    if settings.live_session_auto_record_enabled:
+        from app.live_session_recorder import get_live_session_recorder
+        from app.kite_ticker_runtime import get_kite_ticker_runtime
+        from app.market_safety_routes import get_market_safety_status
+        from app.tick_bridge_routes import tick_bridge_status
+        live_session_recorder_task = asyncio.create_task(get_live_session_recorder().run_loop(
+            lambda: get_kite_ticker_runtime().status(), get_market_safety_status, tick_bridge_status
+        ))
+    if settings.live_session_cert_eod_enabled:
+        from app.live_session_certification_routes import get_certification_eod_scheduler
+        certification_eod_task = asyncio.create_task(get_certification_eod_scheduler().run_loop())
     try:
         yield
     finally:
-        for task in (monitor_task, market_data_task):
+        for task in (monitor_task, market_data_task, kite_runtime_task, runtime_maintenance_task, notification_scheduler_task, daily_digest_scheduler_task, live_session_recorder_task, certification_eod_task):
             if task is not None:
                 task.cancel()
                 try:
                     await task
                 except asyncio.CancelledError:
                     pass
+        if settings.is_live() and settings.kite_websocket_requested:
+            from app.kite_ticker_runtime import get_kite_ticker_runtime
+            get_kite_ticker_runtime().stop("application shutdown")
         logger.info("Shutting down VSTradingAI backend")
 
 
@@ -100,6 +134,38 @@ async def request_observability(request: Request, call_next):
 
 from app.routes import router  # noqa: E402
 app.include_router(router)
+from app.market_safety_routes import router as market_safety_router  # noqa: E402
+app.include_router(market_safety_router)
+from app.feed_alert_routes import router as feed_alert_router  # noqa: E402
+app.include_router(feed_alert_router)
+from app.learning_routes import router as learning_router  # noqa: E402
+app.include_router(learning_router)
+from app.production_candidate_routes import router as production_candidate_router  # noqa: E402
+app.include_router(production_candidate_router)
+from app.resilience_routes import router as resilience_router  # noqa: E402
+app.include_router(resilience_router)
+from app.test_scenario_routes import router as test_scenario_router  # noqa: E402
+app.include_router(test_scenario_router)
+from app.live_intelligence_routes import router as live_intelligence_router  # noqa: E402
+app.include_router(live_intelligence_router)
+from app.live_paper_bridge_routes import router as live_paper_bridge_router  # noqa: E402
+app.include_router(live_paper_bridge_router)
+from app.tick_bridge_routes import router as tick_bridge_router  # noqa: E402
+app.include_router(tick_bridge_router)
+from app.kite_stream_routes import router as kite_stream_router  # noqa: E402
+app.include_router(kite_stream_router)
+from app.kite_ticker_runtime_routes import router as kite_ticker_runtime_router  # noqa: E402
+app.include_router(kite_ticker_runtime_router)
+from app.runtime_maintenance_routes import router as runtime_maintenance_router  # noqa: E402
+app.include_router(runtime_maintenance_router)
+from app.integration_readiness_routes import router as integration_readiness_router  # noqa: E402
+app.include_router(integration_readiness_router)
+from app.live_session_validation_routes import router as live_session_validation_router  # noqa: E402
+app.include_router(live_session_validation_router)
+from app.live_session_certification_routes import router as live_session_certification_router  # noqa: E402
+app.include_router(live_session_certification_router)
+from app.live_market_routes import router as live_market_router  # noqa: E402
+app.include_router(live_market_router)
 
 
 @app.get("/healthz")

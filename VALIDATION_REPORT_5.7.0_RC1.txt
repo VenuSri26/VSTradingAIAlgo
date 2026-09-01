@@ -1,0 +1,8 @@
+VSTradingAI V5.7.0 RC1 validation
+Baseline: V5.6.0 RC1
+Backend tests: 96 passed
+Python compilation: PASS
+Shell syntax: PASS
+Frontend source integration: PASS
+Frontend production build: required on AWS deployment host
+Live broker order submission: DISABLED

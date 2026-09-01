@@ -1,0 +1,4 @@
+Release: 6.2.0-rc.1
+Baseline: 6.1.0-rc.1
+New module: notification scheduler, escalation, acknowledgement and retry backoff
+Live orders: disabled

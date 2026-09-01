@@ -37,13 +37,14 @@ def test_monitor_holds_and_records_event(tmp_path, monkeypatch):
     assert events[0]["action"] == "HOLD"
 
 
-def test_monitor_closes_target(tmp_path, monkeypatch):
+def test_monitor_target_one_moves_single_lot_to_breakeven(tmp_path, monkeypatch):
     trade_id = _open_trade(tmp_path, monkeypatch)
     result = monitor_once(QuoteSource(121), now=datetime(2026, 8, 2, 14, 0))
-    assert result["action"] == "CLOSED"
-    assert result["status"] == "CLOSED_TARGET_1"
-    assert store.get_open_paper_trade() is None
-    assert store.list_paper_monitor_events(trade_id)[0]["action"] == "CLOSED"
+    assert result["action"] == "MANAGED"
+    assert result["remaining_quantity"] == 75
+    assert result["active_stop_loss"] >= 100
+    assert store.get_open_paper_trade() is not None
+    assert store.list_paper_monitor_events(trade_id)[0]["action"] == "MANAGED"
 
 
 def test_monitor_forces_eod_exit(tmp_path, monkeypatch):

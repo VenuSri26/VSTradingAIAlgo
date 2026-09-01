@@ -1,0 +1,9 @@
+V6.6.0 RC1 validation
+- Baseline: V6.5.0 RC1 cumulative source
+- Python compilation: PASS
+- Backend tests: 130 passed
+- Frontend source integration: PASS
+- Frontend production build: deferred to AWS deployment gate (dependencies not bundled)
+- Deployment script syntax: PASS
+- Version alignment: 6.6.0-rc.1
+- Live broker orders: DISABLED

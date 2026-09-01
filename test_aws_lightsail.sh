@@ -78,3 +78,11 @@ echo "Report: $REPORT"
 test -f "$APP_DIR/frontend/dist/index.html" || { echo "Frontend dist/index.html is missing" >&2; exit 1; }
 curl -fsS http://127.0.0.1/ >/dev/null
 echo "Frontend dashboard: PASS"
+
+curl -fsS "$BASE_URL/api/paper/management/status" | tee -a "$REPORT" >/dev/null
+pass "Paper management endpoint"
+curl -fsS "$BASE_URL/api/kite-stream/status" | tee -a "$REPORT" >/dev/null
+pass "Kite stream status endpoint"
+
+curl -fsS "$BASE_URL/api/kite-runtime/status" | tee -a "$REPORT" >/dev/null
+pass "KiteTicker runtime endpoint"

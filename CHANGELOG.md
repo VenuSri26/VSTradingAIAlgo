@@ -222,3 +222,8 @@ All notable VSTradingAI changes are recorded here. The project follows semantic 
 - Added market regime, smart-money structure and Greeks-based gamma intelligence.
 - Added AI Command Center API and dashboard workspace.
 - Added V2.8 regression tests; full backend suite now passes 61 tests.
+
+## 6.8.0-rc.1
+- Added configurable multi-session live-data certification.
+- Added certification notification report API and Live Intelligence panel.
+- Added cross-session readiness, WebSocket, error, and feed-age thresholds.

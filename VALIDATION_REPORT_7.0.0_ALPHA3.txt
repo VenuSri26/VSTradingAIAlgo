@@ -1,0 +1,10 @@
+VSTradingAI 7.0.0 Alpha 3 validation
+=====================================
+Backend compilation: PASS
+Backend regression tests: 149 passed
+New V7 stream/realtime tests: PASS
+Shell syntax: PASS
+Frontend source integration: COMPLETE
+Frontend local build: NOT EXECUTED (node_modules not present in packaging runtime); AWS npm install + npm run build remains deployment gate.
+Real Zerodha market session: NOT VALIDATED in packaging environment; requires AWS credentials and market-hours observation.
+Live broker orders: DISABLED

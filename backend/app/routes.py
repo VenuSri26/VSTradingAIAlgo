@@ -6,6 +6,7 @@ from typing import Literal
 import hashlib
 from pydantic import BaseModel, Field, model_validator
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect, Header, Depends
+from fastapi.responses import Response
 from app.config import settings, validate
 from app.pipeline import run_pipeline
 from app.observability import run_observed_pipeline, metrics_snapshot, list_alerts
@@ -464,10 +465,13 @@ def execute_paper_trade(body: PaperExecuteRequest):
         if "UNIQUE constraint failed" in str(exc):
             raise HTTPException(status_code=409, detail="A paper trade is already open") from exc
         raise
+    from app.paper_trade_management import ensure_management
+    trade = store.get_open_paper_trade()
+    management = ensure_management(trade) if trade else None
     return {
         "id": trade_id, "status": "OPEN", "quantity": decision.requested_quantity,
         "effective_entry": round(body.entry_price + settings.paper_slippage_rupees, 2),
-        "risk": decision.to_dict(), "execution_mode": "PAPER_ONLY",
+        "risk": decision.to_dict(), "management": management, "execution_mode": "PAPER_ONLY",
     }
 
 
@@ -479,6 +483,26 @@ def paper_trades(trading_day: str | None = None, status: str | None = None, limi
 @router.get("/api/paper/portfolio")
 def paper_portfolio(trading_day: str | None = None):
     return store.paper_portfolio_summary(trading_day)
+
+
+@router.get("/api/paper/journal")
+def paper_journal(trading_day: str | None = None, limit: int = 200):
+    from app.paper_journal import journal_rows
+    return {"trades": journal_rows(trading_day=trading_day, limit=limit), "execution_mode": "PAPER_ONLY"}
+
+
+@router.get("/api/paper/journal.csv")
+def paper_journal_csv(trading_day: str | None = None, limit: int = 200):
+    from app.paper_journal import journal_csv
+    body = journal_csv(trading_day=trading_day, limit=limit)
+    filename = f"paper-journal-{trading_day or 'all'}.csv"
+    return Response(content=body, media_type="text/csv", headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+
+
+@router.get("/api/paper/daily-summary")
+def paper_daily_summary(trading_day: str | None = None):
+    from app.paper_journal import daily_summary
+    return daily_summary(trading_day=trading_day)
 
 
 @router.get("/api/paper/trades/{trade_id}/timeline")
@@ -499,9 +523,10 @@ def close_paper_trade_manual(body: PaperCloseRequest):
     trade = store.get_open_paper_trade()
     if not trade:
         raise HTTPException(status_code=404, detail="No open paper trade")
-    turnover = (trade["entry_price"] + body.close_price) * trade["quantity"]
-    costs = turnover * settings.paper_cost_rate
-    closed = store.close_paper_trade(trade["id"], body.close_price, "CLOSED_MANUAL", costs, body.reason)
+    from app.paper_trade_management import close_manually
+    closed = close_manually(trade, body.close_price, body.reason)
+    if closed is None:
+        raise HTTPException(status_code=409, detail="Paper trade is already closed")
     store.record_trade_result(closed["net_pnl"], "B")
     store.record_paper_monitor_event(trade["id"], body.close_price, "CLOSED", body.reason)
     return closed
@@ -517,24 +542,36 @@ def monitor_paper_trade(body: PaperMonitorRequest):
     trade = store.get_open_paper_trade()
     if not trade:
         return {"action": "NONE", "detail": "No open paper trade"}
-    reason = None
-    status = None
-    if body.force_eod:
-        reason, status = "END_OF_DAY", "CLOSED_EOD"
-    elif body.current_price <= trade["stop_loss"]:
-        reason, status = "STOP_LOSS", "CLOSED_SL"
-    elif trade.get("target_2") and body.current_price >= trade["target_2"]:
-        reason, status = "TARGET_2", "CLOSED_TARGET_2"
-    elif trade.get("target_1") and body.current_price >= trade["target_1"]:
-        reason, status = "TARGET_1", "CLOSED_TARGET_1"
-    if not status:
-        unrealized = round((body.current_price - trade["entry_price"]) * trade["quantity"], 2)
-        return {"action": "HOLD", "trade_id": trade["id"], "unrealized_pnl": unrealized}
-    turnover = (trade["entry_price"] + body.current_price) * trade["quantity"]
-    estimated_costs = turnover * settings.paper_cost_rate
-    closed = store.close_paper_trade(trade["id"], body.current_price, status, estimated_costs, reason)
-    store.record_trade_result(closed["net_pnl"], "B")
-    return {"action": "CLOSED", **closed}
+    from app.paper_trade_management import evaluate
+    result = evaluate(trade, body.current_price, force_eod=body.force_eod)
+    detail = ",".join(result.get("actions") or []) or result.get("reason")
+    store.record_paper_monitor_event(trade["id"], body.current_price, result["action"], detail)
+    if result["action"] == "CLOSED" and result.get("net_pnl") is not None:
+        store.record_trade_result(result["net_pnl"], "B")
+    return result
+
+
+@router.get("/api/paper/management/status")
+def paper_management_status():
+    from app.paper_trade_management import get_open_management
+    state = get_open_management()
+    return state or {"trade": None, "management": None, "execution_mode": "PAPER_ONLY"}
+
+
+class PaperManagementConfigRequest(BaseModel):
+    trailing_enabled: bool = True
+    trail_distance_pct: float = Field(default=10.0, ge=2.0, le=30.0)
+
+
+@router.post("/api/paper/management/config", dependencies=[Depends(require_admin_token)])
+def update_paper_management(body: PaperManagementConfigRequest):
+    trade = store.get_open_paper_trade()
+    if not trade:
+        raise HTTPException(status_code=404, detail="No open paper trade")
+    from app.paper_trade_management import ensure_management, configure
+    ensure_management(trade)
+    return configure(trade["id"], trailing_enabled=body.trailing_enabled,
+                     trail_distance_pct=body.trail_distance_pct)
 
 
 @router.get("/api/paper/monitor/status")

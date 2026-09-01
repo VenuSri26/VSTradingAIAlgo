@@ -363,6 +363,31 @@ def close_paper_trade(trade_id: int, close_price: float, status: str, estimated_
         return result
 
 
+def close_paper_trade_managed(trade_id: int, close_price: float, status: str, estimated_costs: float, exit_reason: str, gross_pnl: float) -> dict | None:
+    """Close a paper trade using externally aggregated gross P&L.
+
+    Used by partial-exit management where some quantity was realized earlier.
+    """
+    with _conn() as conn:
+        row = conn.execute("SELECT * FROM paper_trades WHERE id = ?", (trade_id,)).fetchone()
+        if row is None or row["status"] != "OPEN":
+            return None
+        costs = round(max(0.0, estimated_costs), 2)
+        gross = round(float(gross_pnl), 2)
+        net = round(gross - costs, 2)
+        closed_at = datetime.now(timezone.utc).isoformat()
+        conn.execute(
+            """UPDATE paper_trades SET closed_at=?, close_price=?, status=?, gross_pnl=?,
+               estimated_costs=?, net_pnl=?, exit_reason=? WHERE id=?""",
+            (closed_at, close_price, status, gross, costs, net, exit_reason, trade_id),
+        )
+        conn.execute("UPDATE trade_setups SET status = 'PAPER_CLOSED' WHERE id = ?", (row["setup_id"],))
+        result = dict(row)
+        result.update(closed_at=closed_at, close_price=close_price, status=status, gross_pnl=gross,
+                      estimated_costs=costs, net_pnl=net, exit_reason=exit_reason)
+        return result
+
+
 def record_paper_monitor_event(trade_id: int, current_price: float | None, action: str, detail: str | None) -> int:
     with _conn() as conn:
         cur = conn.execute(
@@ -430,7 +455,12 @@ def get_trade_timeline(trade_id: int) -> dict | None:
             return None
         setup = conn.execute("SELECT * FROM trade_setups WHERE id=?", (trade["setup_id"],)).fetchone()
         events = conn.execute("SELECT * FROM paper_monitor_events WHERE trade_id=? ORDER BY id", (trade_id,)).fetchall()
-    return {"trade": dict(trade), "setup": dict(setup) if setup else None, "events": [dict(e) for e in events]}
+    management = None
+    with _conn() as conn:
+        m = conn.execute("SELECT * FROM paper_trade_management WHERE trade_id=?", (trade_id,)).fetchone()
+        management = dict(m) if m else None
+    return {"trade": dict(trade), "setup": dict(setup) if setup else None,
+            "events": [dict(e) for e in events], "management": management}
 
 
 def paper_analytics_summary() -> dict:
