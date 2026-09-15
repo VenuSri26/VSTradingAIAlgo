@@ -218,3 +218,14 @@ Approver / verifier:
 - **Trading impact:** No strategy or broker-write behavior added. Mock mode and disabled live orders remain the defaults.
 - **Validation:** 9 focused integrity tests and 180 full backend tests passed; frontend production build passed; npm audit found 0 vulnerabilities; `git diff --check` passed.
 - **Rollback:** Revert this single additive checkpoint; no schema or data migration is required.
+
+## V7.3.2 — Finalized 3-Minute Candle Integrity
+
+- **Date:** 2026-09-15
+- **Reason:** Prevent polling timestamps, duplicate samples, or delayed samples from altering decision candles.
+- **Modules:** `market_data_service.py` and focused market-data regression tests.
+- **Safety:** Exchange timestamps are mandatory and timezone-aware; missing, invalid, or future timestamps activate `NO_TRADE`; duplicate and out-of-order samples cannot mutate OHLC; decision consumers receive finalized 3-minute candles only.
+- **Trading impact:** No strategy thresholds or broker-write behavior changed. Mock mode and disabled live orders remain the defaults.
+- **Compatibility:** Existing candle fields remain available; the additive `finalized` field explicitly distinguishes closed bars, and supervisor snapshots intentionally exclude the forming bar.
+- **Validation:** 16 focused integrity tests and 184 full backend tests passed; frontend production build passed; npm audit found 0 vulnerabilities; `git diff --check` passed.
+- **Rollback:** Revert this single checkpoint; no schema or persisted-data migration is required.
