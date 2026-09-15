@@ -90,13 +90,35 @@ def resilience_status() -> dict[str, Any]:
     except Exception as exc:
         checks.append(ResilienceCheck("POSITION_RECOVERY", "Position restart recovery", "FAIL", str(exc), True))
 
+    if not settings.live_orders_enabled:
+        execution_check = ResilienceCheck(
+            "EXECUTION_SPINE", "Controlled live execution spine", "PASS",
+            "Live broker orders are disabled; preview/paper flow remains active", False,
+        )
+    else:
+        try:
+            from app.execution_spine import status_snapshot
+            execution = status_snapshot()
+            execution_ready = bool(execution.get("ready"))
+            execution_check = ResilienceCheck(
+                "EXECUTION_SPINE", "Controlled live execution spine",
+                "PASS" if execution_ready else "FAIL",
+                (
+                    "Admin/manual execution spine is ready; blind broker retries are disabled"
+                    if execution_ready else
+                    f"Execution spine blocked; unknown_orders={execution.get('unknown_orders')}, "
+                    f"blockers={execution.get('execution_gate', {}).get('blockers', [])}"
+                ),
+                not execution_ready,
+            )
+        except Exception as exc:
+            execution_check = ResilienceCheck(
+                "EXECUTION_SPINE", "Controlled live execution spine", "FAIL",
+                f"Execution-spine readiness could not be verified: {exc}", True,
+            )
+
     checks.extend([
-        ResilienceCheck(
-            "LIVE_ORDER_LOCK", "Automatic live-order safety lock",
-            "PASS" if not settings.live_orders_enabled else "FAIL",
-            "Live broker orders are disabled" if not settings.live_orders_enabled else "Live broker orders are enabled",
-            settings.live_orders_enabled,
-        ),
+        execution_check,
         ResilienceCheck(
             "TIMEZONE", "Trading timezone", "PASS" if settings.app_timezone == "Asia/Kolkata" else "WARN",
             f"Configured timezone: {settings.app_timezone}", False,

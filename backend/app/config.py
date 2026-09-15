@@ -30,8 +30,11 @@ class Settings:
     require_https: bool = os.getenv("REQUIRE_HTTPS", "false").lower() in ("1", "true", "yes", "on")
     live_orders_enabled: bool = os.getenv("LIVE_ORDERS_ENABLED", "false").lower() in ("1", "true", "yes", "on")
     execution_preview_ttl_sec: int = int(os.getenv("EXECUTION_PREVIEW_TTL_SEC", "120"))
+    execution_max_spread_pct: float = float(os.getenv("EXECUTION_MAX_SPREAD_PCT", "3.0"))
     app_timezone: str = os.getenv("APP_TIMEZONE", "Asia/Kolkata")
-    nifty_lot_size: int = int(os.getenv("NIFTY_LOT_SIZE", "75"))
+    # NSE revised NIFTY market lot from 75 to 65. Live execution also validates
+    # quantity against the broker instrument master, which is authoritative.
+    nifty_lot_size: int = int(os.getenv("NIFTY_LOT_SIZE", "65"))
 
     max_trades_per_day: int = int(os.getenv("MAX_TRADES_PER_DAY", "3"))
     daily_loss_limit: float = float(os.getenv("DAILY_LOSS_LIMIT", "5000"))
@@ -170,6 +173,10 @@ def validate(settings_obj: Settings = settings) -> list[str]:
 
     if settings_obj.max_trades_per_day < 1:
         problems.append("MAX_TRADES_PER_DAY must be >= 1")
+    if settings_obj.execution_preview_ttl_sec < 30:
+        problems.append("EXECUTION_PREVIEW_TTL_SEC must be >= 30")
+    if not 0.1 <= settings_obj.execution_max_spread_pct <= 20:
+        problems.append("EXECUTION_MAX_SPREAD_PCT must be between 0.1 and 20")
     if settings_obj.daily_loss_limit <= 0:
         problems.append("DAILY_LOSS_LIMIT must be > 0")
     if settings_obj.max_consecutive_losses < 1:

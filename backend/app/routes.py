@@ -745,6 +745,8 @@ class OrderPreviewRequest(BaseModel):
     estimated_price: float = Field(gt=0)
     price: float | None = Field(default=None, gt=0)
     idempotency_key: str | None = Field(default=None, max_length=100)
+    signal_id: str | None = Field(default=None, min_length=3, max_length=64)
+    setup_id: int | None = Field(default=None, gt=0)
 
 
 @router.post("/api/execution/preview", dependencies=[Depends(require_admin_token)])
@@ -773,6 +775,78 @@ def execution_confirm(body: OrderConfirmRequest):
 def execution_orders():
     from app.execution_readiness import list_orders
     return {"orders": list_orders(), "live_orders_enabled": settings.live_orders_enabled}
+
+
+class LiveExecutionRequest(BaseModel):
+    confirmation_text: str = Field(min_length=1, max_length=30)
+
+
+@router.get("/api/execution/spine/status")
+def execution_spine_status():
+    from app.execution_spine import status_snapshot
+    return {**status_snapshot(), "live_orders_enabled": settings.live_orders_enabled}
+
+
+@router.get("/api/execution/orders/{execution_id}/events")
+def execution_order_events(execution_id: str, limit: int = 100):
+    from app.execution_spine import recent_events
+    return {"execution_id": execution_id, "events": recent_events(execution_id, limit)}
+
+
+@router.post("/api/execution/orders/{execution_id}/submit", dependencies=[Depends(require_admin_token)])
+def execution_submit(execution_id: str, body: LiveExecutionRequest):
+    if not settings.is_live():
+        raise HTTPException(status_code=409, detail="Live execution is unavailable outside TRADING_MODE=live")
+    if not settings.live_orders_enabled:
+        raise HTTPException(status_code=409, detail="LIVE_ORDERS_ENABLED is false")
+    from app.execution_spine import submit_once
+    from app.zerodha_execution_adapter import ZerodhaExecutionAdapter
+    try:
+        ds = get_data_source()
+        return submit_once(
+            execution_id,
+            broker=ZerodhaExecutionAdapter(ds),
+            data_source=ds,
+            live_enabled=settings.live_orders_enabled,
+            confirmation_text=body.confirmation_text,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@router.post("/api/execution/orders/{execution_id}/reconcile", dependencies=[Depends(require_admin_token)])
+def execution_reconcile(execution_id: str):
+    if not settings.is_live():
+        raise HTTPException(status_code=409, detail="Broker reconciliation requires TRADING_MODE=live")
+    from app.execution_spine import reconcile_once
+    from app.zerodha_execution_adapter import ZerodhaExecutionAdapter
+    try:
+        return reconcile_once(execution_id, broker=ZerodhaExecutionAdapter(get_data_source()))
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@router.post("/api/execution/reconcile-unknown", dependencies=[Depends(require_admin_token)])
+def execution_reconcile_unknown(limit: int = 50):
+    if not settings.is_live():
+        raise HTTPException(status_code=409, detail="Broker reconciliation requires TRADING_MODE=live")
+    from app.execution_spine import reconcile_unknowns
+    from app.zerodha_execution_adapter import ZerodhaExecutionAdapter
+    return {"orders": reconcile_unknowns(broker=ZerodhaExecutionAdapter(get_data_source()), limit=limit)}
+
+
+@router.get("/api/operations/metrics/prometheus", response_class=Response)
+def execution_prometheus_metrics():
+    from app.execution_spine import prometheus_text
+    return Response(content=prometheus_text(), media_type="text/plain; version=0.0.4; charset=utf-8")
 
 
 @router.get("/api/security/status")

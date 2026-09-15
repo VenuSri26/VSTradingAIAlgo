@@ -2,6 +2,7 @@ from pathlib import Path
 
 from app import store
 from app.paper_trade_management import ensure_management, evaluate, get_management, close_manually
+from app.config import settings
 
 
 def _payload():
@@ -28,43 +29,43 @@ def _open(tmp_path, monkeypatch, quantity=150):
 
 
 def test_target_one_books_partial_and_moves_stop(tmp_path, monkeypatch):
-    trade, tid = _open(tmp_path, monkeypatch, 150)
+    trade, tid = _open(tmp_path, monkeypatch, settings.nifty_lot_size * 2)
     result = evaluate(trade, 121)
     assert result["action"] == "MANAGED"
-    assert "PARTIAL_EXIT_75" in result["actions"]
-    assert result["remaining_quantity"] == 75
+    assert f"PARTIAL_EXIT_{settings.nifty_lot_size}" in result["actions"]
+    assert result["remaining_quantity"] == settings.nifty_lot_size
     assert result["active_stop_loss"] >= 100
     persisted = get_management(tid)
     assert persisted["partial_target_done"] == 1
-    assert persisted["realized_quantity"] == 75
+    assert persisted["realized_quantity"] == settings.nifty_lot_size
 
 
 def test_trailing_stop_closes_remaining_with_aggregate_pnl(tmp_path, monkeypatch):
-    trade, tid = _open(tmp_path, monkeypatch, 150)
+    trade, tid = _open(tmp_path, monkeypatch, settings.nifty_lot_size * 2)
     first = evaluate(trade, 125)
-    assert first["remaining_quantity"] == 75
+    assert first["remaining_quantity"] == settings.nifty_lot_size
     raised = evaluate(trade, 135)
     assert raised["active_stop_loss"] >= 121.5
     closed = evaluate(trade, 121)
     assert closed["action"] == "CLOSED"
     assert closed["status"] == "CLOSED_TRAILING"
-    assert closed["gross_pnl"] == (25 * 75) + (21 * 75)
+    assert closed["gross_pnl"] == (25 * settings.nifty_lot_size) + (21 * settings.nifty_lot_size)
     assert store.get_open_paper_trade() is None
     assert get_management(tid)["remaining_quantity"] == 0
 
 
 def test_single_lot_moves_to_breakeven_without_partial(tmp_path, monkeypatch):
-    trade, _ = _open(tmp_path, monkeypatch, 75)
+    trade, _ = _open(tmp_path, monkeypatch, settings.nifty_lot_size)
     result = evaluate(trade, 121)
-    assert result["remaining_quantity"] == 75
+    assert result["remaining_quantity"] == settings.nifty_lot_size
     assert "STOP_TO_BREAKEVEN" in result["actions"]
     assert not any(x.startswith("PARTIAL_EXIT") for x in result["actions"])
 
 
 def test_manual_close_uses_partial_realized_pnl(tmp_path, monkeypatch):
-    trade, _ = _open(tmp_path, monkeypatch, 150)
+    trade, _ = _open(tmp_path, monkeypatch, settings.nifty_lot_size * 2)
     evaluate(trade, 125)
     closed = close_manually(trade, 110, "USER_EXIT")
     assert closed is not None
-    assert closed["gross_pnl"] == (25 * 75) + (10 * 75)
+    assert closed["gross_pnl"] == (25 * settings.nifty_lot_size) + (10 * settings.nifty_lot_size)
     assert closed["exit_reason"] == "USER_EXIT"

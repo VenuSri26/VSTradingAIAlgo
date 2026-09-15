@@ -5,6 +5,9 @@ It never generates synthetic prices. It also builds small in-memory OHLC series
 for NIFTY from accepted ticks; when a historical indicator is requested and
 there are not enough streamed candles yet, callers may explicitly fall back to
 completed Zerodha historical candles.
+
+V7.3 hardening rejects duplicate/out-of-order ticks before they can mutate the
+live cache or candle series, and treats completed candle buckets as immutable.
 """
 from __future__ import annotations
 
@@ -46,6 +49,11 @@ class _CandleSeries:
     def add(self, price: float, ts: datetime, volume_delta: float = 0.0) -> None:
         start, end = self._bucket(ts)
         key = start.isoformat()
+        if self.current is not None:
+            current_start = datetime.fromisoformat(self.current.start.replace("Z", "+00:00"))
+            # Once a bucket is closed, a delayed message must not reopen it.
+            if start < current_start.astimezone(timezone.utc):
+                return
         if self.current is None or self.current.start != key:
             if self.current is not None:
                 self.completed.append(self.current)
@@ -82,8 +90,11 @@ class LiveMarketStream:
         self._history: deque[dict[str, Any]] = deque(maxlen=history_size)
         self._candles = {tf: _CandleSeries(m) for tf, m in (("1m", 1), ("3m", 3), ("5m", 5))}
         self._last_cumulative_volume: dict[int, float] = defaultdict(float)
+        self._last_tick_identity: dict[int, tuple[datetime, str]] = {}
         self._accepted = 0
         self._ignored = 0
+        self._duplicates = 0
+        self._out_of_order = 0
         self._last_tick_at: str | None = None
 
     @staticmethod
@@ -115,7 +126,22 @@ class LiveMarketStream:
             return {"status": "IGNORED", "reason": "INVALID_PRICE_OR_TIMESTAMP"}
 
         cumulative_volume = float(tick.get("volume") or 0.0)
+        sequence = tick.get("sequence")
+        fingerprint = f"{ts.isoformat()}|{price_f}|{cumulative_volume}|{sequence if sequence is not None else ''}"
         with self._lock:
+            previous_identity = self._last_tick_identity.get(token)
+            if previous_identity is not None:
+                previous_ts, previous_fingerprint = previous_identity
+                if fingerprint == previous_fingerprint:
+                    self._ignored += 1
+                    self._duplicates += 1
+                    return {"status": "IGNORED", "reason": "DUPLICATE_TICK"}
+                if ts < previous_ts:
+                    self._ignored += 1
+                    self._out_of_order += 1
+                    return {"status": "IGNORED", "reason": "OUT_OF_ORDER_TICK"}
+            self._last_tick_identity[token] = (ts, fingerprint)
+
             previous_volume = self._last_cumulative_volume[token]
             volume_delta = max(0.0, cumulative_volume - previous_volume) if cumulative_volume else 0.0
             if cumulative_volume:
@@ -165,6 +191,8 @@ class LiveMarketStream:
             latest_count = len(self._latest)
             accepted = self._accepted
             ignored = self._ignored
+            duplicates = self._duplicates
+            out_of_order = self._out_of_order
             last_tick = self._last_tick_at
             candle_counts = {tf: len(series.rows(limit=10000)) for tf, series in self._candles.items()}
         age_sec = None
@@ -177,6 +205,8 @@ class LiveMarketStream:
             "latest_instruments": latest_count,
             "accepted_ticks": accepted,
             "ignored_ticks": ignored,
+            "duplicate_ticks": duplicates,
+            "out_of_order_ticks": out_of_order,
             "last_tick_at": last_tick,
             "age_sec": round(age_sec, 3) if age_sec is not None else None,
             "nifty_spot": nifty.get("ltp"),
