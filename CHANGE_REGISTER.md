@@ -208,3 +208,13 @@ Approver / verifier:
 - Multi-session certification evidence gate.
 - Certification report notification outbox integration.
 - Four new backend tests; full suite 137 passed.
+
+## V7.3.1 — Fail-Closed Input Integrity
+
+- **Date:** 2026-09-15
+- **Reason:** Remove silent timestamp substitution and prevent unverifiable option quotes or reset volume counters from contaminating execution evidence.
+- **Modules:** `live_market_stream.py`, `data_quality_gate.py`, and focused regression tests.
+- **Safety:** Broker ticks without a valid exchange timestamp or positive finite price are rejected; missing option quote timestamps block execution; cumulative-volume resets are rebased without inflating candle volume.
+- **Trading impact:** No strategy or broker-write behavior added. Mock mode and disabled live orders remain the defaults.
+- **Validation:** 9 focused integrity tests and 180 full backend tests passed; frontend production build passed; npm audit found 0 vulnerabilities; `git diff --check` passed.
+- **Rollback:** Revert this single additive checkpoint; no schema or data migration is required.

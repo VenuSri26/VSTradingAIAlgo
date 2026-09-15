@@ -151,7 +151,8 @@ def evaluate_order_quote(order: dict[str, Any], option_snapshot: dict[str, Any],
 
     quote_age = _parse_age(leg.get("quote_timestamp"))
     if quote_age is None:
-        warnings.append("OPTION_QUOTE_TIMESTAMP_UNAVAILABLE")
+        checks.append({"name": "option_quote_fresh", "passed": False, "detail": "timestamp unavailable"})
+        blockers.append("OPTION_QUOTE_TIMESTAMP_UNAVAILABLE")
     else:
         quote_fresh = quote_age <= float(settings.max_data_age_sec)
         checks.append({"name": "option_quote_fresh", "passed": quote_fresh, "detail": f"age_sec={quote_age}"})

@@ -14,6 +14,7 @@ from __future__ import annotations
 from collections import defaultdict, deque
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
+from math import isfinite
 from threading import RLock
 from typing import Any
 
@@ -95,6 +96,7 @@ class LiveMarketStream:
         self._ignored = 0
         self._duplicates = 0
         self._out_of_order = 0
+        self._volume_resets = 0
         self._last_tick_at: str | None = None
 
     @staticmethod
@@ -104,7 +106,7 @@ class LiveMarketStream:
         elif value:
             dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
         else:
-            dt = datetime.now(timezone.utc)
+            raise ValueError("exchange_timestamp is required")
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
         return dt.astimezone(timezone.utc)
@@ -120,12 +122,16 @@ class LiveMarketStream:
         try:
             price_f = float(price)
             ts = self._parse_ts(tick.get("exchange_timestamp"))
+            cumulative_volume = float(tick.get("volume") or 0.0)
+            if not isfinite(price_f) or price_f <= 0:
+                raise ValueError("price must be finite and positive")
+            if not isfinite(cumulative_volume) or cumulative_volume < 0:
+                raise ValueError("volume must be finite and non-negative")
         except (TypeError, ValueError):
             with self._lock:
                 self._ignored += 1
             return {"status": "IGNORED", "reason": "INVALID_PRICE_OR_TIMESTAMP"}
 
-        cumulative_volume = float(tick.get("volume") or 0.0)
         sequence = tick.get("sequence")
         fingerprint = f"{ts.isoformat()}|{price_f}|{cumulative_volume}|{sequence if sequence is not None else ''}"
         with self._lock:
@@ -143,7 +149,14 @@ class LiveMarketStream:
             self._last_tick_identity[token] = (ts, fingerprint)
 
             previous_volume = self._last_cumulative_volume[token]
-            volume_delta = max(0.0, cumulative_volume - previous_volume) if cumulative_volume else 0.0
+            volume_delta = 0.0
+            if cumulative_volume:
+                if previous_volume and cumulative_volume < previous_volume:
+                    # Broker cumulative counters can reset at a session boundary.
+                    # Rebase without attributing the reset value to this candle.
+                    self._volume_resets += 1
+                else:
+                    volume_delta = max(0.0, cumulative_volume - previous_volume)
             if cumulative_volume:
                 self._last_cumulative_volume[token] = cumulative_volume
 
@@ -193,6 +206,7 @@ class LiveMarketStream:
             ignored = self._ignored
             duplicates = self._duplicates
             out_of_order = self._out_of_order
+            volume_resets = self._volume_resets
             last_tick = self._last_tick_at
             candle_counts = {tf: len(series.rows(limit=10000)) for tf, series in self._candles.items()}
         age_sec = None
@@ -207,6 +221,7 @@ class LiveMarketStream:
             "ignored_ticks": ignored,
             "duplicate_ticks": duplicates,
             "out_of_order_ticks": out_of_order,
+            "volume_counter_resets": volume_resets,
             "last_tick_at": last_tick,
             "age_sec": round(age_sec, 3) if age_sec is not None else None,
             "nifty_spot": nifty.get("ltp"),

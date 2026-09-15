@@ -41,3 +41,14 @@ def test_quote_gate_uses_live_contract_lot_size():
     result = evaluate_order_quote(order, snapshot, max_spread_pct=3.0)
     assert result.approved is False
     assert "INVALID_LIVE_LOT_SIZE" in result.blockers
+
+
+def test_quote_gate_blocks_missing_quote_timestamp():
+    order = {"tradingsymbol": "NIFTY26SEP25000CE", "quantity": 65}
+    snapshot = {"chain": {"CE": [{
+        "tradingsymbol": "NIFTY26SEP25000CE", "bid": 99.5, "ask": 100.0,
+        "volume": 1000, "lot_size": 65, "quote_timestamp": None,
+    }], "PE": []}}
+    result = evaluate_order_quote(order, snapshot, max_spread_pct=3.0)
+    assert result.approved is False
+    assert "OPTION_QUOTE_TIMESTAMP_UNAVAILABLE" in result.blockers

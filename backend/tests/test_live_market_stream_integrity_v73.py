@@ -37,3 +37,27 @@ def test_late_tick_cannot_reopen_closed_three_minute_bar():
     after = stream.candles("3m", include_current=True)
     assert after == before
     assert stream.status()["out_of_order_ticks"] == 1
+
+
+def test_missing_exchange_timestamp_is_rejected_fail_closed():
+    stream = LiveMarketStream()
+    tick = _tick(25000, datetime.now(timezone.utc), 1)
+    tick.pop("exchange_timestamp")
+    assert stream.ingest(tick) == {"status": "IGNORED", "reason": "INVALID_PRICE_OR_TIMESTAMP"}
+    assert stream.candles("3m") == []
+
+
+def test_volume_counter_reset_does_not_inflate_candle_volume():
+    stream = LiveMarketStream()
+    base = datetime(2026, 9, 1, 4, 0, tzinfo=timezone.utc)
+    first = _tick(25000, base, 1)
+    first["volume"] = 1000
+    reset = _tick(25001, base + timedelta(seconds=1), 2)
+    reset["volume"] = 10
+    after_reset = _tick(25002, base + timedelta(seconds=2), 3)
+    after_reset["volume"] = 15
+    stream.ingest(first)
+    stream.ingest(reset)
+    stream.ingest(after_reset)
+    assert stream.candles("1m")[-1]["volume"] == 1005
+    assert stream.status()["volume_counter_resets"] == 1
