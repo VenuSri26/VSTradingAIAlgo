@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+from math import isfinite
 from typing import Any
 
 from app.config import settings
@@ -25,6 +26,19 @@ def _parse_age(value: str | None) -> float | None:
     try:
         ts = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
         return max(0.0, (datetime.now(timezone.utc) - ts.astimezone(timezone.utc)).total_seconds())
+    except (TypeError, ValueError):
+        return None
+
+
+def _parse_expiry(value: Any) -> date | None:
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(str(value)[:10])
     except (TypeError, ValueError):
         return None
 
@@ -77,6 +91,15 @@ def evaluate_runtime_quality(
     else:
         warnings.append("WEBSOCKET_NOT_REQUIRED_BY_CONFIGURATION")
 
+    consensus = market_snapshot.get("source_consensus") or {}
+    consensus_status = str(consensus.get("status") or "UNAVAILABLE")
+    consensus_verified = bool(consensus.get("approved")) and consensus_status == "VERIFIED"
+    checks.append({"name": "source_consensus_verified", "passed": consensus_verified, "detail": consensus_status})
+    if settings.market_data_consensus_required and not consensus_verified:
+        blockers.append(f"SOURCE_CONSENSUS_{consensus_status}")
+    elif not consensus_verified:
+        warnings.append(f"SOURCE_CONSENSUS_{consensus_status}")
+
     return DataQualityDecision(not blockers, blockers, warnings, checks)
 
 
@@ -107,19 +130,88 @@ def evaluate_order_quote(order: dict[str, Any], option_snapshot: dict[str, Any],
     warnings: list[str] = []
     checks: list[dict[str, Any]] = []
     symbol = str(order.get("tradingsymbol") or "").upper().replace("NFO:", "")
-    leg = None
+    matches: list[tuple[str, dict[str, Any]]] = []
     for side in ("CE", "PE"):
         for item in (option_snapshot.get("chain", {}) or {}).get(side, []) or []:
             if str(item.get("tradingsymbol") or "").upper() == symbol:
-                leg = item
-                break
-        if leg:
-            break
-    found = leg is not None
-    checks.append({"name": "contract_in_live_chain", "passed": found, "detail": symbol})
-    if not found:
+                matches.append((side, item))
+    unique = len(matches) == 1
+    checks.append({"name": "contract_unique_in_live_chain", "passed": unique, "detail": f"{symbol}; matches={len(matches)}"})
+    if not matches:
         blockers.append("CONTRACT_NOT_IN_LIVE_CHAIN")
         return DataQualityDecision(False, blockers, warnings, checks)
+    if not unique:
+        blockers.append("AMBIGUOUS_CONTRACT_IDENTITY")
+        return DataQualityDecision(False, blockers, warnings, checks)
+
+    chain_side, leg = matches[0]
+    snapshot_expiry = _parse_expiry(option_snapshot.get("expiry"))
+    leg_expiry = _parse_expiry(leg.get("expiry"))
+    expiry_ok = (
+        snapshot_expiry is not None
+        and leg_expiry is not None
+        and snapshot_expiry == leg_expiry
+        and snapshot_expiry >= datetime.now(timezone.utc).date()
+    )
+    checks.append({
+        "name": "active_expiry_matches_snapshot",
+        "passed": expiry_ok,
+        "detail": f"snapshot={snapshot_expiry}, contract={leg_expiry}",
+    })
+    if not expiry_ok:
+        blockers.append("CONTRACT_EXPIRY_INVALID")
+
+    exchange = str(leg.get("exchange") or "").upper()
+    segment = str(leg.get("segment") or "").upper()
+    venue_ok = exchange == "NFO" and segment == "NFO-OPT"
+    checks.append({"name": "nfo_option_venue", "passed": venue_ok, "detail": f"exchange={exchange}, segment={segment}"})
+    if not venue_ok:
+        blockers.append("CONTRACT_VENUE_MISMATCH")
+
+    option_type = str(leg.get("option_type") or "").upper()
+    type_ok = option_type == chain_side and symbol.endswith(chain_side)
+    checks.append({"name": "option_type_consistent", "passed": type_ok, "detail": f"chain={chain_side}, contract={option_type}"})
+    if not type_ok:
+        blockers.append("CONTRACT_OPTION_TYPE_MISMATCH")
+
+    try:
+        instrument_token = int(leg.get("instrument_token") or 0)
+    except (TypeError, ValueError):
+        instrument_token = 0
+    token_ok = instrument_token > 0
+    supplied_token = order.get("instrument_token")
+    if supplied_token is not None:
+        try:
+            token_ok = token_ok and int(supplied_token) == instrument_token
+        except (TypeError, ValueError):
+            token_ok = False
+    checks.append({"name": "instrument_token_verified", "passed": token_ok, "detail": f"token={instrument_token}"})
+    if not token_ok:
+        blockers.append("CONTRACT_TOKEN_MISMATCH")
+
+    try:
+        strike = float(leg.get("strike"))
+    except (TypeError, ValueError):
+        strike = 0.0
+    strike_ok = isfinite(strike) and strike > 0
+    supplied_strike = order.get("strike")
+    if supplied_strike is not None:
+        try:
+            strike_ok = strike_ok and float(supplied_strike) == strike
+        except (TypeError, ValueError):
+            strike_ok = False
+    checks.append({"name": "strike_verified", "passed": strike_ok, "detail": f"strike={strike}"})
+    if not strike_ok:
+        blockers.append("CONTRACT_STRIKE_MISMATCH")
+
+    try:
+        tick_size = float(leg.get("tick_size") or 0)
+    except (TypeError, ValueError):
+        tick_size = 0.0
+    tick_ok = isfinite(tick_size) and tick_size > 0
+    checks.append({"name": "tick_size_verified", "passed": tick_ok, "detail": f"tick_size={tick_size}"})
+    if not tick_ok:
+        blockers.append("CONTRACT_TICK_SIZE_INVALID")
 
     bid = float(leg.get("bid") or 0)
     ask = float(leg.get("ask") or 0)

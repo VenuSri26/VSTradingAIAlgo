@@ -229,3 +229,69 @@ Approver / verifier:
 - **Compatibility:** Existing candle fields remain available; the additive `finalized` field explicitly distinguishes closed bars, and supervisor snapshots intentionally exclude the forming bar.
 - **Validation:** 16 focused integrity tests and 184 full backend tests passed; frontend production build passed; npm audit found 0 vulnerabilities; `git diff --check` passed.
 - **Rollback:** Revert this single checkpoint; no schema or persisted-data migration is required.
+
+## V7.3.3 — Contract Master and Expiry Integrity
+
+- **Date:** 2026-09-15
+- **Reason:** Prevent stale, ambiguous, or mismatched option-contract metadata from reaching the execution adapter.
+- **Modules:** `data_sources/zerodha_client.py`, `data_quality_gate.py`, and focused contract-quality regression tests.
+- **Safety:** Every proposed option order must resolve to exactly one live-chain contract with matching active expiry, NFO option venue, CE/PE type, positive instrument token, strike, tick size, and broker-reported lot size. Missing or inconsistent metadata fails closed.
+- **Trading impact:** No strategy thresholds or broker-write behavior changed. Mock mode and disabled live orders remain the defaults.
+- **Compatibility:** Zerodha option-chain responses gain additive contract-master fields; existing API fields remain unchanged.
+- **Validation:** 9 focused contract-quality tests and 188 full backend tests passed; frontend production build passed; npm audit found 0 vulnerabilities; `git diff --check` passed.
+- **Rollback:** Revert this single checkpoint; no schema or persisted-data migration is required.
+
+## V7.4.0 — Broker/Local Position Reconciliation
+
+- **Date:** 2026-09-15
+- **Reason:** Detect hidden or mismatched NIFTY option exposure before permitting another entry.
+- **Modules:** `execution_spine.py`, protected execution route, and focused reconciliation regression tests.
+- **Safety:** Reconciliation reads Zerodha's current net positions and compares them with today's durable local fills. Unexpected symbols or quantity differences latch the persistent kill switch and create an audit event; no corrective broker order is sent automatically.
+- **Trading impact:** No strategy, signal, or broker-write behavior changed. Mock mode and disabled live orders remain the defaults.
+- **Compatibility:** Adds the admin-protected `POST /api/execution/reconcile-positions` endpoint; existing APIs remain unchanged.
+- **Validation:** 8 focused execution/reconciliation tests and 192 full backend tests passed; frontend production build passed; npm audit found 0 vulnerabilities; `git diff --check` passed.
+- **Rollback:** Revert this additive checkpoint; no schema or persisted-data migration is required.
+
+## V7.4.1 — End-of-Day Execution Session Seal
+
+- **Date:** 2026-09-16
+- **Reason:** Make daily shutdown auditable and prevent unresolved exposure from silently crossing the session boundary.
+- **Modules:** execution configuration, execution spine, EOD session seal service, protected execution route, and focused regression tests.
+- **Safety:** New entries are blocked at the configured cutoff (default 15:15 IST). After the configured seal time (default 15:25 IST), sealing requires no unresolved execution exposure and no open local position. Live mode additionally requires an exact broker/local position reconciliation. Any failure latches the persistent kill switch; the seal never sends an automatic broker order.
+- **Trading impact:** No strategy, signal, or broker-write behavior changed. Mock mode and disabled live orders remain the defaults.
+- **Compatibility:** Adds `EXECUTION_ENTRY_CUTOFF_TIME`, `EXECUTION_EOD_SEAL_TIME`, and the admin-protected `POST /api/execution/eod-seal` endpoint.
+- **Validation:** 9 focused execution/EOD tests and 197 full backend tests passed; frontend production build passed; npm audit found 0 vulnerabilities; `git diff --check` passed.
+- **Rollback:** Revert this additive checkpoint; no schema or persisted-data migration is required.
+
+## V7.4.2 — Mandatory Position-Protection Evidence
+
+- **Date:** 2026-09-16
+- **Reason:** Ensure every eligible live entry has a deterministic, immutable exit policy before broker submission.
+- **Modules:** position-protection gate, execution readiness/spine integration, and focused regression tests.
+- **Safety:** Approved setups must contain a valid entry range, hard stop below entry, ordered targets, configured minimum risk/reward, and invalidation rationale. Order payloads cannot override or widen the approved stop; averaging down is explicitly prohibited in the persisted policy.
+- **Trading impact:** No automatic exit or broker-write behavior was added. Human confirmation, NIFTY options BUY-only, one-position limits, mock mode, and disabled live orders remain intact.
+- **Compatibility:** Protection evidence is added to execution quality snapshots; existing endpoints remain unchanged.
+- **Validation:** 9 focused protection/execution tests and 202 full backend tests passed; frontend production build passed; npm audit found 0 vulnerabilities; `git diff --check` passed.
+- **Rollback:** Revert this additive checkpoint; no schema or persisted-data migration is required.
+
+## V7.5.0 — Deterministic Decision Evidence Certificate
+
+- **Date:** 2026-09-16
+- **Reason:** Make every strategy decision reproducible and detect evidence mutation before live confirmation.
+- **Modules:** decision-evidence certificate service, pipeline response model, execution readiness gate, and tamper/replay regression tests.
+- **Safety:** Each normal decision is bound to one finalized, timezone-aware, exchange-aligned 3-minute OHLCV bar and a canonical feature hash. Live confirmation rejects missing or altered certificates. Forming or misaligned bars cannot be certified.
+- **Trading impact:** No strategy thresholds or broker-write behavior changed. Default `NO_TRADE`, human confirmation, mock mode and disabled live orders remain intact.
+- **Compatibility:** Adds `decision_evidence` to live decision payloads and execution quality snapshots; existing fields remain unchanged.
+- **Validation:** 21 focused evidence/pipeline/execution tests and 206 full backend tests passed; frontend production build passed; npm audit found 0 vulnerabilities; `git diff --check` passed.
+- **Rollback:** Revert this additive checkpoint; no database migration is required.
+
+## V7.6.0 — Overfitting-Resistant Research Certification
+
+- **Date:** 2026-09-16
+- **Reason:** Prevent ordinary chronological splits and the best result from repeated trials from being mistaken for robust strategy evidence.
+- **Modules:** `strategy_validation.py`, Strategy Lab request/response integration, research documentation, and focused regression tests.
+- **Safety:** Adds purge/embargo gaps, Probabilistic Sharpe, Deflated Sharpe, complete-trial accounting, and fail-closed evidence states. Results remain research-only and never promote a strategy automatically.
+- **Trading impact:** No live signal, threshold, broker, or execution behavior changed. Mock mode and disabled live orders remain the defaults; AWS is unchanged.
+- **Compatibility:** Existing Strategy Lab fields remain valid. `advanced_validation`, `research_trials`, purged splits, and research certification are additive.
+- **Validation:** 12 focused Strategy Lab tests and 227 full backend tests passed; frontend production build passed; npm audit found 0 vulnerabilities; runtime safety and `git diff --check` passed.
+- **Rollback:** Revert this additive checkpoint; no schema or persisted-data migration is required.

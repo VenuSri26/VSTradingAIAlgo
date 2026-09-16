@@ -6,8 +6,9 @@ AI agent direct broker-write capability.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, time, timezone
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from app import store
 from app.config import settings
@@ -17,11 +18,14 @@ from app.execution_ledger import (
     event_count,
     get_order,
     list_events,
+    list_orders,
     list_orders_by_status,
+    record_event,
     status_counts,
     transition_order,
 )
 from app.risk_supervisor import status as risk_status
+from app.position_protection import validate_protection_plan
 from app.zerodha_execution_adapter import AmbiguousBrokerState
 
 
@@ -43,6 +47,14 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def entry_window_status(now: datetime | None = None) -> dict[str, Any]:
+    local = (now or datetime.now(timezone.utc)).astimezone(ZoneInfo("Asia/Kolkata"))
+    hh, mm = (int(value) for value in settings.execution_entry_cutoff_time.split(":", 1))
+    cutoff = datetime.combine(local.date(), time(hh, mm), tzinfo=local.tzinfo)
+    approved = local < cutoff
+    return {"approved": approved, "local_time": local.isoformat(), "cutoff": cutoff.isoformat(), "blocker": None if approved else "ENTRY_CUTOFF_REACHED"}
+
+
 def _setup_gate(order_record: dict[str, Any]) -> dict[str, Any]:
     order = order_record["order"]
     setup_id = order.get("setup_id")
@@ -58,6 +70,9 @@ def _setup_gate(order_record: dict[str, Any]) -> dict[str, Any]:
     symbol = str(order.get("tradingsymbol") or "").upper().replace("NFO:", "")
     if not (symbol.startswith("NIFTY") and symbol.endswith(("CE", "PE"))):
         raise ValueError("VST entry execution is restricted to NIFTY CE/PE")
+    protection = validate_protection_plan(setup, order)
+    if not protection["approved"]:
+        raise ValueError("PositionProtectionGate blocked: " + ",".join(protection["blockers"]))
     return setup
 
 
@@ -103,6 +118,9 @@ def submit_once(
         raise ValueError(f"Execution is not submit-ready: {record['status']}")
 
     setup = _setup_gate(record)
+    entry_window = entry_window_status()
+    if not entry_window["approved"]:
+        raise ValueError(str(entry_window["blocker"]))
     gate = execution_gate_status(exclude_execution_id=execution_id)
     if not gate["approved"]:
         raise ValueError("Execution gate blocked: " + ",".join(gate["blockers"]))
@@ -221,6 +239,50 @@ def reconcile_once(execution_id: str, *, broker: Any) -> dict[str, Any]:
 def reconcile_unknowns(*, broker: Any, limit: int = 50) -> list[dict[str, Any]]:
     items = list_orders_by_status(("UNKNOWN", "SUBMITTING", "ACKNOWLEDGED", "OPEN", "PARTIAL"), limit=limit)
     return [reconcile_once(item["execution_id"], broker=broker) for item in items]
+
+
+def reconcile_positions_once(*, broker: Any) -> dict[str, Any]:
+    """Compare today's locally recorded fills with current NFO broker positions.
+
+    This check is read-only at the broker. Any mismatch latches the persistent
+    kill switch and therefore blocks new entries until a human investigates.
+    """
+    trading_day = datetime.now(ZoneInfo("Asia/Kolkata")).date()
+    local: dict[str, int] = {}
+    for item in list_orders(limit=500):
+        created_at = datetime.fromisoformat(str(item["created_at"]).replace("Z", "+00:00"))
+        if created_at.astimezone(ZoneInfo("Asia/Kolkata")).date() != trading_day:
+            continue
+        if item["status"] not in {"PARTIAL", "COMPLETE"}:
+            continue
+        symbol = str(item["order"].get("tradingsymbol") or "").upper().replace("NFO:", "")
+        filled = int(item.get("filled_quantity") or 0)
+        if symbol and filled:
+            local[symbol] = local.get(symbol, 0) + filled
+
+    broker_snapshot = broker.positions()
+    broker_net: dict[str, int] = {}
+    for item in (broker_snapshot or {}).get("net", []) or []:
+        exchange = str(item.get("exchange") or "").upper()
+        symbol = str(item.get("tradingsymbol") or "").upper().replace("NFO:", "")
+        quantity = int(item.get("quantity") or 0)
+        if exchange == "NFO" and symbol.startswith("NIFTY") and symbol.endswith(("CE", "PE")) and quantity:
+            broker_net[symbol] = broker_net.get(symbol, 0) + quantity
+
+    symbols = sorted(set(local) | set(broker_net))
+    mismatches = [
+        {"tradingsymbol": symbol, "local_quantity": local.get(symbol, 0), "broker_quantity": broker_net.get(symbol, 0)}
+        for symbol in symbols
+        if local.get(symbol, 0) != broker_net.get(symbol, 0)
+    ]
+    matched = not mismatches
+    detail = {"trading_day": trading_day.isoformat(), "matched": matched, "local": local, "broker": broker_net, "mismatches": mismatches}
+    if not matched:
+        store.set_kill_switch(True, "Broker/local NIFTY position mismatch")
+        record_event(None, "POSITION_RECONCILIATION_MISMATCH", {**detail, "kill_switch_latched": True})
+    else:
+        record_event(None, "POSITION_RECONCILIATION_MATCHED", detail)
+    return detail
 
 
 def status_snapshot() -> dict[str, Any]:

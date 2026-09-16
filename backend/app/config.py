@@ -31,6 +31,8 @@ class Settings:
     live_orders_enabled: bool = os.getenv("LIVE_ORDERS_ENABLED", "false").lower() in ("1", "true", "yes", "on")
     execution_preview_ttl_sec: int = int(os.getenv("EXECUTION_PREVIEW_TTL_SEC", "120"))
     execution_max_spread_pct: float = float(os.getenv("EXECUTION_MAX_SPREAD_PCT", "3.0"))
+    execution_entry_cutoff_time: str = os.getenv("EXECUTION_ENTRY_CUTOFF_TIME", "15:15")
+    execution_eod_seal_time: str = os.getenv("EXECUTION_EOD_SEAL_TIME", "15:25")
     app_timezone: str = os.getenv("APP_TIMEZONE", "Asia/Kolkata")
     # NSE revised NIFTY market lot from 75 to 65. Live execution also validates
     # quantity against the broker instrument master, which is authoritative.
@@ -60,6 +62,22 @@ class Settings:
     market_data_supervisor_enabled: bool = os.getenv("MARKET_DATA_SUPERVISOR_ENABLED", "true").lower() in ("1", "true", "yes", "on")
     market_data_poll_interval_sec: float = float(os.getenv("MARKET_DATA_POLL_INTERVAL_SEC", "3"))
     market_data_state_path: str = os.getenv("MARKET_DATA_STATE_PATH", "./data/market_data_state.json")
+    market_data_consensus_required: bool = os.getenv("MARKET_DATA_CONSENSUS_REQUIRED", "false").lower() in ("1", "true", "yes", "on")
+    market_data_consensus_min_sources: int = int(os.getenv("MARKET_DATA_CONSENSUS_MIN_SOURCES", "2"))
+    market_data_consensus_max_deviation_pct: float = float(os.getenv("MARKET_DATA_CONSENSUS_MAX_DEVIATION_PCT", "0.15"))
+    secondary_quote_replay_path: str = os.getenv("SECONDARY_QUOTE_REPLAY_PATH", "./data/secondary_quotes.jsonl")
+    consensus_shadow_history_path: str = os.getenv("CONSENSUS_SHADOW_HISTORY_PATH", "./data/consensus_shadow.jsonl")
+    upstox_market_data_enabled: bool = os.getenv("UPSTOX_MARKET_DATA_ENABLED", "false").lower() in ("1", "true", "yes", "on")
+    upstox_access_token: str | None = os.getenv("UPSTOX_ACCESS_TOKEN")
+    upstox_nifty_instrument_key: str = os.getenv("UPSTOX_NIFTY_INSTRUMENT_KEY", "NSE_INDEX|Nifty 50")
+    upstox_quote_timeout_sec: float = float(os.getenv("UPSTOX_QUOTE_TIMEOUT_SEC", "3"))
+    upstox_quote_poll_interval_sec: float = float(os.getenv("UPSTOX_QUOTE_POLL_INTERVAL_SEC", "3"))
+    consensus_cert_min_samples: int = int(os.getenv("CONSENSUS_CERT_MIN_SAMPLES", "500"))
+    consensus_cert_min_sessions: int = int(os.getenv("CONSENSUS_CERT_MIN_SESSIONS", "3"))
+    consensus_cert_min_verified_ratio: float = float(os.getenv("CONSENSUS_CERT_MIN_VERIFIED_RATIO", "0.98"))
+    consensus_cert_max_conflict_ratio: float = float(os.getenv("CONSENSUS_CERT_MAX_CONFLICT_RATIO", "0.005"))
+    consensus_cert_max_stale_ratio: float = float(os.getenv("CONSENSUS_CERT_MAX_STALE_RATIO", "0.01"))
+    consensus_cert_max_p95_deviation_pct: float = float(os.getenv("CONSENSUS_CERT_MAX_P95_DEVIATION_PCT", "0.08"))
     market_open_time: str = os.getenv("MARKET_OPEN_TIME", "09:15")
     market_close_time: str = os.getenv("MARKET_CLOSE_TIME", "15:30")
     market_holidays: str = os.getenv("MARKET_HOLIDAYS", "")
@@ -175,6 +193,16 @@ def validate(settings_obj: Settings = settings) -> list[str]:
         problems.append("MAX_TRADES_PER_DAY must be >= 1")
     if settings_obj.execution_preview_ttl_sec < 30:
         problems.append("EXECUTION_PREVIEW_TTL_SEC must be >= 30")
+    for name, value in (
+        ("EXECUTION_ENTRY_CUTOFF_TIME", settings_obj.execution_entry_cutoff_time),
+        ("EXECUTION_EOD_SEAL_TIME", settings_obj.execution_eod_seal_time),
+    ):
+        try:
+            hh, mm = [int(x) for x in value.split(":", 1)]
+            if not (0 <= hh <= 23 and 0 <= mm <= 59):
+                raise ValueError
+        except (ValueError, TypeError):
+            problems.append(f"{name} must be HH:MM")
     if not 0.1 <= settings_obj.execution_max_spread_pct <= 20:
         problems.append("EXECUTION_MAX_SPREAD_PCT must be between 0.1 and 20")
     if settings_obj.daily_loss_limit <= 0:
@@ -189,6 +217,29 @@ def validate(settings_obj: Settings = settings) -> list[str]:
         problems.append("POLL_INTERVAL_SEC must be >= 1")
     if settings_obj.market_data_poll_interval_sec < 1:
         problems.append("MARKET_DATA_POLL_INTERVAL_SEC must be >= 1")
+    if settings_obj.market_data_consensus_min_sources < 2:
+        problems.append("MARKET_DATA_CONSENSUS_MIN_SOURCES must be >= 2")
+    if not 0 < settings_obj.market_data_consensus_max_deviation_pct <= 5:
+        problems.append("MARKET_DATA_CONSENSUS_MAX_DEVIATION_PCT must be between 0 and 5")
+    if settings_obj.upstox_market_data_enabled and not settings_obj.upstox_access_token:
+        problems.append("UPSTOX_ACCESS_TOKEN is required when UPSTOX_MARKET_DATA_ENABLED=true")
+    if not 1 <= settings_obj.upstox_quote_timeout_sec <= 30:
+        problems.append("UPSTOX_QUOTE_TIMEOUT_SEC must be between 1 and 30")
+    if settings_obj.upstox_quote_poll_interval_sec < 1:
+        problems.append("UPSTOX_QUOTE_POLL_INTERVAL_SEC must be >= 1")
+    if settings_obj.consensus_cert_min_samples < 10:
+        problems.append("CONSENSUS_CERT_MIN_SAMPLES must be >= 10")
+    if settings_obj.consensus_cert_min_sessions < 1:
+        problems.append("CONSENSUS_CERT_MIN_SESSIONS must be >= 1")
+    for name, value in (
+        ("CONSENSUS_CERT_MIN_VERIFIED_RATIO", settings_obj.consensus_cert_min_verified_ratio),
+        ("CONSENSUS_CERT_MAX_CONFLICT_RATIO", settings_obj.consensus_cert_max_conflict_ratio),
+        ("CONSENSUS_CERT_MAX_STALE_RATIO", settings_obj.consensus_cert_max_stale_ratio),
+    ):
+        if not 0 <= value <= 1:
+            problems.append(f"{name} must be between 0 and 1")
+    if not 0 < settings_obj.consensus_cert_max_p95_deviation_pct <= 5:
+        problems.append("CONSENSUS_CERT_MAX_P95_DEVIATION_PCT must be between 0 and 5")
     if settings_obj.instrument_sync_interval_hours < 1:
         problems.append("INSTRUMENT_SYNC_INTERVAL_HOURS must be >= 1")
     if settings_obj.websocket_batch_size < 1:

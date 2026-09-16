@@ -227,3 +227,8 @@ All notable VSTradingAI changes are recorded here. The project follows semantic 
 - Added configurable multi-session live-data certification.
 - Added certification notification report API and Live Intelligence panel.
 - Added cross-session readiness, WebSocket, error, and feed-age thresholds.
+## 7.5.3
+- Added optional read-only Upstox V3 Full Market Quote adapter for independent NIFTY 50 evidence.
+- Added provider-native instrument identity to MarketDataEnvelope V2.
+- Added multi-session shadow-consensus certification with explicit promotion blockers.
+- Preserved shadow-only defaults, disabled live orders, and made no AWS deployment changes.

@@ -166,6 +166,8 @@ from app.live_session_certification_routes import router as live_session_certifi
 app.include_router(live_session_certification_router)
 from app.live_market_routes import router as live_market_router  # noqa: E402
 app.include_router(live_market_router)
+from app.market_data_consensus_routes import router as market_data_consensus_router  # noqa: E402
+app.include_router(market_data_consensus_router)
 
 
 @app.get("/healthz")

@@ -216,6 +216,10 @@ class ZerodhaDataSource(DataSource):
             q = quotes.get(f"NFO:{inst['tradingsymbol']}", {})
             side = "CE" if inst["instrument_type"] == "CE" else "PE"
             chain[side].append({
+                "exchange": inst.get("exchange"),
+                "segment": inst.get("segment"),
+                "expiry": str(inst.get("expiry")) if inst.get("expiry") else None,
+                "option_type": inst.get("instrument_type"),
                 "strike": inst["strike"],
                 "ltp": q.get("last_price"),
                 "oi": q.get("oi"),
@@ -227,6 +231,7 @@ class ZerodhaDataSource(DataSource):
                 "bid": (q.get("depth", {}).get("buy") or [{}])[0].get("price"),
                 "ask": (q.get("depth", {}).get("sell") or [{}])[0].get("price"),
                 "lot_size": inst.get("lot_size"),
+                "tick_size": inst.get("tick_size"),
                 "tradingsymbol": inst.get("tradingsymbol"),
                 "instrument_token": inst.get("instrument_token"),
                 "quote_timestamp": (q.get("timestamp") or q.get("last_trade_time")).isoformat()

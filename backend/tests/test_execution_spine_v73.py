@@ -65,9 +65,13 @@ def _seed_preview_and_order(monkeypatch, tmp_path, live=True):
     _prepare(monkeypatch, tmp_path)
     from app import execution_readiness
     importlib.reload(execution_readiness)
+    monkeypatch.setattr(execution_readiness, "verify_decision_evidence", lambda evidence: True)
     monkeypatch.setattr(execution_readiness, "risk_status", lambda: {"blocked": False, "kill_switch": False})
     monkeypatch.setattr(execution_readiness.store, "get_trade_setup", lambda setup_id: {
-        "id": setup_id, "status": "APPROVED", "grade": "A+", "option_type": "CE"
+        "id": setup_id, "status": "APPROVED", "grade": "A+", "option_type": "CE",
+        "entry_low": 95, "entry_high": 105, "stop_loss": 85,
+        "target_1": 125, "target_2": 145, "risk_reward": 2.0,
+        "explanation": "Invalid below approved structure",
     })
     preview = execution_readiness.create_preview({
         "tradingsymbol": "NIFTY26SEP25000CE",
@@ -109,8 +113,12 @@ def test_ambiguous_submit_becomes_unknown_and_is_not_retried(monkeypatch, tmp_pa
     from app import execution_spine
     importlib.reload(execution_spine)
     monkeypatch.setattr(execution_spine, "risk_status", lambda: {"blocked": False, "kill_switch": False})
+    monkeypatch.setattr(execution_spine, "entry_window_status", lambda: {"approved": True, "blocker": None})
     monkeypatch.setattr(execution_spine.store, "get_trade_setup", lambda setup_id: {
-        "id": setup_id, "status": "APPROVED", "grade": "A+", "option_type": "CE"
+        "id": setup_id, "status": "APPROVED", "grade": "A+", "option_type": "CE",
+        "entry_low": 95, "entry_high": 105, "stop_loss": 85,
+        "target_1": 125, "target_2": 145, "risk_reward": 2.0,
+        "explanation": "Invalid below approved structure",
     })
     monkeypatch.setattr(execution_spine.store, "get_open_position", lambda: None)
     monkeypatch.setattr(execution_spine.store, "get_open_paper_trade", lambda: None)

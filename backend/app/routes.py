@@ -664,6 +664,8 @@ class StrategyLabRequest(BaseModel):
     signals: list[dict]
     config: dict = Field(default_factory=dict)
     walk_forward: dict = Field(default_factory=dict)
+    advanced_validation: dict = Field(default_factory=dict)
+    research_trials: list[dict] = Field(default_factory=list)
 
 
 @router.post("/api/strategy-lab/validate")
@@ -841,6 +843,35 @@ def execution_reconcile_unknown(limit: int = 50):
     from app.execution_spine import reconcile_unknowns
     from app.zerodha_execution_adapter import ZerodhaExecutionAdapter
     return {"orders": reconcile_unknowns(broker=ZerodhaExecutionAdapter(get_data_source()), limit=limit)}
+
+
+@router.post("/api/execution/reconcile-positions", dependencies=[Depends(require_admin_token)])
+def execution_reconcile_positions():
+    if not settings.is_live():
+        raise HTTPException(status_code=409, detail="Broker position reconciliation requires TRADING_MODE=live")
+    from app.execution_spine import reconcile_positions_once
+    from app.zerodha_execution_adapter import ZerodhaExecutionAdapter
+    try:
+        return reconcile_positions_once(broker=ZerodhaExecutionAdapter(get_data_source()))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@router.post("/api/execution/eod-seal", dependencies=[Depends(require_admin_token)])
+def execution_eod_seal():
+    from app.eod_session_seal import seal_session
+    try:
+        broker = None
+        if settings.is_live():
+            from app.zerodha_execution_adapter import ZerodhaExecutionAdapter
+            broker = ZerodhaExecutionAdapter(get_data_source())
+        return seal_session(broker=broker)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @router.get("/api/operations/metrics/prometheus", response_class=Response)

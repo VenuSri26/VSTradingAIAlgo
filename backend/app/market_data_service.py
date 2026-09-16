@@ -10,6 +10,12 @@ from pathlib import Path
 from threading import Lock
 from typing import Any, Callable
 
+from app.config import settings
+from app.market_data_consensus import MarketDataEnvelopeV2, evaluate_source_consensus
+from app.secondary_market_data import get_secondary_quote_adapter
+from app.consensus_shadow import get_consensus_shadow_recorder
+from app.upstox_market_data import get_upstox_quote_adapter
+
 
 @dataclass
 class Candle:
@@ -52,6 +58,9 @@ class MarketFeedState:
     candle_samples_accepted: int = 0
     candle_samples_duplicate: int = 0
     candle_samples_out_of_order: int = 0
+    primary_envelope: dict[str, Any] | None = None
+    source_consensus: dict[str, Any] | None = None
+    consensus_shadow_record: dict[str, Any] | None = None
 
 
 class CandleAggregator:
@@ -196,6 +205,38 @@ class MarketDataSupervisor:
             if market_dt > now + timedelta(seconds=30):
                 raise RuntimeError("market timestamp is in the future; NO_TRADE")
             market_timestamp = market_dt.isoformat()
+            source_name = str(getattr(data_source, "source_name", "UNKNOWN"))
+            primary = MarketDataEnvelopeV2.create(
+                source=source_name,
+                instrument="NIFTY 50",
+                last_price=spot,
+                exchange_timestamp=market_dt,
+                received_at=datetime.now(timezone.utc),
+            )
+            envelopes = [primary]
+            if hasattr(data_source, "get_consensus_quotes"):
+                for raw in data_source.get_consensus_quotes() or []:
+                    envelopes.append(MarketDataEnvelopeV2.create(**raw))
+            else:
+                if settings.upstox_market_data_enabled:
+                    secondary = get_upstox_quote_adapter(
+                        settings.upstox_access_token,
+                        settings.upstox_nifty_instrument_key,
+                        settings.upstox_quote_timeout_sec,
+                        settings.upstox_quote_poll_interval_sec,
+                    ).latest(primary.instrument)
+                else:
+                    secondary = get_secondary_quote_adapter(settings.secondary_quote_replay_path).latest(primary.instrument)
+                if secondary is not None:
+                    envelopes.append(secondary)
+            consensus = evaluate_source_consensus(
+                envelopes,
+                now=now,
+                max_age_sec=self.stale_after_sec,
+                max_price_deviation_pct=settings.market_data_consensus_max_deviation_pct,
+                min_sources=settings.market_data_consensus_min_sources,
+            )
+            shadow_record = get_consensus_shadow_recorder(settings.consensus_shadow_history_path).record(primary, consensus)
             candle_result = self._candles.add(spot, market_dt)
             count = len(options.get("chain", {}).get("CE", [])) + len(options.get("chain", {}).get("PE", []))
             with self._lock:
@@ -224,6 +265,9 @@ class MarketDataSupervisor:
                 instruments_synced=count,
                 safe_no_trade=False,
                 message="Live market snapshot refreshed",
+                primary_envelope=primary.to_dict(),
+                source_consensus=consensus.to_dict(),
+                consensus_shadow_record=shadow_record,
             )
         except Exception as exc:
             with self._lock:

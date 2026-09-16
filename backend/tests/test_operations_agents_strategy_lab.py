@@ -14,6 +14,8 @@ def test_strategy_lab_sample_runs_conservatively():
     assert result["promotion_status"] == "RESEARCH_ONLY"
     assert result["summary"]["total"] >= 1
     assert result["walk_forward_splits"]
+    assert result["purged_walk_forward_splits"]
+    assert result["research_trial_certification"]["status"] == "NOT_REQUESTED"
 
 
 def test_strategy_lab_rejects_missing_candles():

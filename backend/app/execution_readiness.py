@@ -17,6 +17,8 @@ from app.execution_ledger import (
     set_preview_status,
 )
 from app.risk_supervisor import status as risk_status
+from app.position_protection import validate_protection_plan
+from app.decision_evidence import verify_decision_evidence
 
 
 PREVIEW_TTL_SEC = max(30, int(settings.execution_preview_ttl_sec))
@@ -108,10 +110,20 @@ def _validate_live_confirmation(record: dict[str, Any]) -> dict[str, Any]:
     symbol = str(order.get("tradingsymbol") or "").upper()
     if plan_type and not symbol.endswith(plan_type):
         raise ValueError("Order option type does not match the approved setup")
+    protection = validate_protection_plan(setup, order)
+    if not protection["approved"]:
+        raise ValueError("PositionProtectionGate blocked: " + ",".join(protection["blockers"]))
+    try:
+        setup_snapshot = json.loads(str(setup.get("snapshot_json") or "{}"))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        setup_snapshot = {}
+    evidence = setup_snapshot.get("decision_evidence") or {}
+    if not verify_decision_evidence(evidence):
+        raise ValueError("DecisionEvidenceGate blocked: missing or tampered certificate")
     risk = risk_status()
     if risk.get("blocked"):
         raise ValueError("Independent RiskGate is blocked")
-    return {"setup_id": int(setup_id), "grade": setup.get("grade"), "risk": risk}
+    return {"setup_id": int(setup_id), "grade": setup.get("grade"), "risk": risk, "protection": protection, "decision_evidence": evidence}
 
 
 def confirm(preview_id: str, confirmation_text: str, live_enabled: bool) -> dict[str, Any]:
@@ -149,7 +161,7 @@ def confirm(preview_id: str, confirmation_text: str, live_enabled: bool) -> dict
         "created_at": _now().isoformat(),
         "order": record["order"],
         "risk_snapshot": live_validation["risk"] if live_validation else None,
-        "quality_snapshot": None,
+        "quality_snapshot": {"position_protection": live_validation["protection"], "decision_evidence": live_validation["decision_evidence"]} if live_validation else None,
     }
     created = create_order(order)
     set_preview_status(preview_id, "CONFIRMED")
