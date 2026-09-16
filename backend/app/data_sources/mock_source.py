@@ -30,6 +30,8 @@ class MockDataSource(DataSource):
 
     def _generate(self, n: int, freq_minutes: int) -> pd.DataFrame:
         now = datetime.now(timezone.utc).replace(second=0, microsecond=0)
+        if freq_minutes < 1440:
+            now = now.replace(minute=now.minute - now.minute % freq_minutes)
         times = [now - timedelta(minutes=freq_minutes * i) for i in range(n)][::-1]
         # simple mean-reverting random walk with slight upward drift, so
         # indicator math (EMA/RSI/MACD/ADX/ATR/VWAP) has realistic structure

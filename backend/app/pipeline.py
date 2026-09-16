@@ -25,6 +25,7 @@ from app.agents.debate import build_debate
 from app.agents.market_structure import analyse_market_structure
 from app.agents.narrative import build_narrative
 from app import store, greeks as greeks_module
+from app.decision_evidence import build_decision_evidence
 
 
 def _days_to_expiry(expiry_str: str | None, now: datetime) -> float | None:
@@ -320,8 +321,23 @@ def run_pipeline(data_source: DataSource, position: PositionInfo | None = None, 
         overall=HealthStatus.RED if any(c.status == HealthStatus.RED for c in components) else HealthStatus.GREEN,
     )
 
+    evidence_row = df_3m.iloc[-1]
+    evidence_timestamp = df_3m.index[-1]
+    if hasattr(evidence_timestamp, "to_pydatetime"):
+        evidence_timestamp = evidence_timestamp.to_pydatetime()
+    decision_evidence = build_decision_evidence(
+        {"timestamp": evidence_timestamp.isoformat(), "finalized": True,
+         "open": evidence_row["open"], "high": evidence_row["high"],
+         "low": evidence_row["low"], "close": evidence_row["close"],
+         "volume": evidence_row.get("volume", 0), "ticks": 0},
+        {"regime": regime_label, "alignment_score": alignment.score,
+         "decision": decision_type.value, "grade": grade.value,
+         "vwap": round(f.vwap, 6), "ema20": round(f.ema20, 6),
+         "ema50": round(f.ema50, 6), "rsi14": round(f.rsi14, 6), "atr14": round(f.atr14, 6)},
+    )
     response = LiveDecisionResponse(
         timestamp=now.isoformat(),
+        decision_evidence=decision_evidence,
         market={
             "spot": spot, "vix": vix, "phase": _market_phase(now), "source": data_source.source_name,
             "day_change": round(f.close - f.pdc, 2), "day_change_pct": round((f.close - f.pdc) / f.pdc * 100, 2),
@@ -392,7 +408,7 @@ def _no_trade_response(reason: str, components: list[ComponentHealth], now: date
                               max_trades=settings.max_trades_per_day, daily_pnl=session["daily_pnl"],
                               daily_loss_limit=settings.daily_loss_limit, consecutive_losses=session["consecutive_losses"])
     return LiveDecisionResponse(
-        timestamp=now.isoformat(), market={"status": "DATA_ERROR", "reason": reason}, regime={}, levels={},
+        timestamp=now.isoformat(), decision_evidence={}, market={"status": "DATA_ERROR", "reason": reason}, regime={}, levels={},
         indicators={}, options={}, gamma={}, liquidity={}, agents=agents,
         alignment=compute_alignment(agents, w), debate={"bull_case": [], "bear_case": [], "neutral_case": [], "coverage_ratio": 0.0, "disagreement_score": 0.0, "dominant_direction": "NEUTRAL"}, flags=[], decision=decision, risk=risk_result,
         position=PositionInfo(has_position=False), system_health=system_health,

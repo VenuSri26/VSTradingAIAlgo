@@ -2,12 +2,19 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 from collections import deque
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from threading import Lock
 from typing import Any, Callable
+
+from app.config import settings
+from app.market_data_consensus import MarketDataEnvelopeV2, evaluate_source_consensus
+from app.secondary_market_data import get_secondary_quote_adapter
+from app.consensus_shadow import get_consensus_shadow_recorder
+from app.upstox_market_data import get_upstox_quote_adapter
 
 
 @dataclass
@@ -19,6 +26,7 @@ class Candle:
     low: float
     close: float
     ticks: int
+    finalized: bool = False
 
 
 @dataclass
@@ -47,6 +55,12 @@ class MarketFeedState:
     safe_no_trade: bool = True
     message: str = "Market feed has not started"
     candles_3m: list[dict[str, Any]] = field(default_factory=list)
+    candle_samples_accepted: int = 0
+    candle_samples_duplicate: int = 0
+    candle_samples_out_of_order: int = 0
+    primary_envelope: dict[str, Any] | None = None
+    source_consensus: dict[str, Any] | None = None
+    consensus_shadow_record: dict[str, Any] | None = None
 
 
 class CandleAggregator:
@@ -54,6 +68,7 @@ class CandleAggregator:
         self.timeframe_minutes = timeframe_minutes
         self._candles: deque[Candle] = deque(maxlen=max_candles)
         self._current: Candle | None = None
+        self._last_timestamp: datetime | None = None
 
     def _bucket(self, timestamp: datetime) -> tuple[datetime, datetime]:
         timestamp = timestamp.astimezone(timezone.utc).replace(second=0, microsecond=0)
@@ -61,18 +76,31 @@ class CandleAggregator:
         start = timestamp.replace(minute=minute)
         return start, start + timedelta(minutes=self.timeframe_minutes)
 
-    def add(self, price: float, timestamp: datetime | None = None) -> None:
-        timestamp = timestamp or datetime.now(timezone.utc)
+    def add(self, price: float, timestamp: datetime) -> str:
+        price = float(price)
+        if not math.isfinite(price) or price <= 0:
+            raise ValueError("candle price must be finite and positive")
+        if not isinstance(timestamp, datetime) or timestamp.tzinfo is None:
+            raise ValueError("timezone-aware market timestamp is required")
+        timestamp = timestamp.astimezone(timezone.utc)
+        if self._last_timestamp is not None:
+            if timestamp == self._last_timestamp:
+                return "DUPLICATE"
+            if timestamp < self._last_timestamp:
+                return "OUT_OF_ORDER"
+        self._last_timestamp = timestamp
         start, end = self._bucket(timestamp)
         if self._current is None or self._current.start != start.isoformat():
             if self._current is not None:
+                self._current.finalized = True
                 self._candles.append(self._current)
             self._current = Candle(start.isoformat(), end.isoformat(), price, price, price, price, 1)
-            return
+            return "ACCEPTED"
         self._current.high = max(self._current.high, price)
         self._current.low = min(self._current.low, price)
         self._current.close = price
         self._current.ticks += 1
+        return "ACCEPTED"
 
     def snapshot(self, include_current: bool = True) -> list[dict[str, Any]]:
         items = [asdict(item) for item in self._candles]
@@ -112,7 +140,9 @@ class MarketDataSupervisor:
         with self._lock:
             for key, value in values.items():
                 setattr(self._state, key, value)
-            self._state.candles_3m = self._candles.snapshot()
+            # Decision consumers receive finalized bars only. The forming bar
+            # remains internal until the next market-timestamp bucket begins.
+            self._state.candles_3m = self._candles.snapshot(include_current=False)
             self._persist()
 
     def snapshot(self) -> dict[str, Any]:
@@ -163,18 +193,62 @@ class MarketDataSupervisor:
             spot = float(data_source.get_spot())
             vix = float(data_source.get_vix())
             options = data_source.get_option_chain(atm_range=8)
-            market_timestamp = now.isoformat()
-            if hasattr(data_source, "get_last_tick_timestamp"):
-                try:
-                    market_timestamp = data_source.get_last_tick_timestamp()
-                except Exception:
-                    pass
-            self._candles.add(spot, now)
+            if not hasattr(data_source, "get_last_tick_timestamp"):
+                raise RuntimeError("market timestamp unavailable; NO_TRADE")
+            market_timestamp = data_source.get_last_tick_timestamp()
+            if not market_timestamp:
+                raise RuntimeError("market timestamp unavailable; NO_TRADE")
+            market_dt = datetime.fromisoformat(str(market_timestamp).replace("Z", "+00:00"))
+            if market_dt.tzinfo is None:
+                raise RuntimeError("market timestamp must include timezone; NO_TRADE")
+            market_dt = market_dt.astimezone(timezone.utc)
+            if market_dt > now + timedelta(seconds=30):
+                raise RuntimeError("market timestamp is in the future; NO_TRADE")
+            market_timestamp = market_dt.isoformat()
+            source_name = str(getattr(data_source, "source_name", "UNKNOWN"))
+            primary = MarketDataEnvelopeV2.create(
+                source=source_name,
+                instrument="NIFTY 50",
+                last_price=spot,
+                exchange_timestamp=market_dt,
+                received_at=datetime.now(timezone.utc),
+            )
+            envelopes = [primary]
+            if hasattr(data_source, "get_consensus_quotes"):
+                for raw in data_source.get_consensus_quotes() or []:
+                    envelopes.append(MarketDataEnvelopeV2.create(**raw))
+            else:
+                if settings.upstox_market_data_enabled:
+                    secondary = get_upstox_quote_adapter(
+                        settings.upstox_access_token,
+                        settings.upstox_nifty_instrument_key,
+                        settings.upstox_quote_timeout_sec,
+                        settings.upstox_quote_poll_interval_sec,
+                    ).latest(primary.instrument)
+                else:
+                    secondary = get_secondary_quote_adapter(settings.secondary_quote_replay_path).latest(primary.instrument)
+                if secondary is not None:
+                    envelopes.append(secondary)
+            consensus = evaluate_source_consensus(
+                envelopes,
+                now=now,
+                max_age_sec=self.stale_after_sec,
+                max_price_deviation_pct=settings.market_data_consensus_max_deviation_pct,
+                min_sources=settings.market_data_consensus_min_sources,
+            )
+            shadow_record = get_consensus_shadow_recorder(settings.consensus_shadow_history_path).record(primary, consensus)
+            candle_result = self._candles.add(spot, market_dt)
             count = len(options.get("chain", {}).get("CE", [])) + len(options.get("chain", {}).get("PE", []))
             with self._lock:
                 if self._state.consecutive_failures:
                     self._state.reconnects += 1
                 self._state.successful_polls += 1
+                if candle_result == "ACCEPTED":
+                    self._state.candle_samples_accepted += 1
+                elif candle_result == "DUPLICATE":
+                    self._state.candle_samples_duplicate += 1
+                else:
+                    self._state.candle_samples_out_of_order += 1
             self._update(
                 running=True,
                 connected=True,
@@ -191,6 +265,9 @@ class MarketDataSupervisor:
                 instruments_synced=count,
                 safe_no_trade=False,
                 message="Live market snapshot refreshed",
+                primary_envelope=primary.to_dict(),
+                source_consensus=consensus.to_dict(),
+                consensus_shadow_record=shadow_record,
             )
         except Exception as exc:
             with self._lock:

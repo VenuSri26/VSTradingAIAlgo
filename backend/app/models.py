@@ -227,6 +227,7 @@ class SystemHealth:
 class LiveDecisionResponse:
     """Top-level payload for GET /api/decision/live — matches section 31/37."""
     timestamp: str
+    decision_evidence: dict
     market: dict
     regime: dict
     levels: dict

@@ -7,7 +7,10 @@ from typing import Any
 import pandas as pd
 import numpy as np
 
-from app.strategy_validation import ReplayConfig, ReplaySignal, replay_signals, summarize_trades, walk_forward_splits
+from app.strategy_validation import (
+    ReplayConfig, ReplaySignal, certify_research_trials, purged_walk_forward_splits,
+    replay_signals, summarize_trades, walk_forward_splits,
+)
 
 
 def _json_safe(value):
@@ -56,12 +59,28 @@ def validate_strategy(payload: dict[str, Any]) -> dict:
         int(wf.get("test_size", max(1, len(frame) // 4))),
         int(wf.get("step_size", max(1, len(frame) // 4))),
     ) if wf.get("enabled") and len(frame) >= 4 else []
+    advanced = payload.get("advanced_validation") or {}
+    purged_splits = purged_walk_forward_splits(
+        len(frame), int(advanced.get("train_size", max(1, len(frame) // 2))),
+        int(advanced.get("test_size", max(1, len(frame) // 4))),
+        int(advanced.get("step_size", max(1, len(frame) // 4))),
+        int(advanced.get("purge_size", 0)), int(advanced.get("embargo_size", 0)),
+    ) if advanced.get("enabled") and len(frame) >= 4 else []
+    research_trials = payload.get("research_trials") or []
+    trial_certification = certify_research_trials(
+        research_trials,
+        str(advanced.get("selected_trial") or ""),
+        int(advanced.get("min_observations", 30)),
+        float(advanced.get("min_probability", 0.95)),
+    ) if research_trials else {"status": "NOT_REQUESTED", "blockers": []}
     return {
         "run_at": datetime.now(timezone.utc).isoformat(),
         "name": str(payload.get("name") or "Unnamed Strategy"),
         "summary": summary,
         "trades": _json_safe([asdict(t) for t in trades]),
         "walk_forward_splits": _json_safe(splits),
+        "purged_walk_forward_splits": _json_safe(purged_splits),
+        "research_trial_certification": _json_safe(trial_certification),
         "config": asdict(config),
         "promotion_status": "RESEARCH_ONLY",
         "note": "Results are descriptive. Production weights and execution are never changed automatically.",
@@ -80,4 +99,5 @@ def sample_payload() -> dict:
         "signals": [{"signal_time": times[1].isoformat(), "side": "LONG", "entry": 101, "stop_loss": 99, "target": 107, "regime": "TREND", "grade": "A"}],
         "config": {"quantity": 75, "slippage_points": 0.25, "cost_rate": 0.0015, "initial_capital": 100000, "max_holding_bars": 8},
         "walk_forward": {"enabled": True, "train_size": 6, "test_size": 3, "step_size": 3},
+        "advanced_validation": {"enabled": True, "train_size": 6, "test_size": 3, "step_size": 3, "purge_size": 1, "embargo_size": 1},
     }
