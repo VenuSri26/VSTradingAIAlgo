@@ -17,10 +17,26 @@ from __future__ import annotations
 import time
 import pandas as pd
 from datetime import date, datetime, timezone
+from zoneinfo import ZoneInfo
 from .base import DataSource, DataUnavailable
 
 NIFTY_INSTRUMENT_TOKEN = 256265  # NSE:NIFTY 50 index token (verify against your Kite instrument dump)
 INDIA_VIX_TOKEN = 264969         # NSE:INDIA VIX
+IST = ZoneInfo("Asia/Kolkata")
+
+
+def _exchange_timestamp_iso(value) -> str | None:
+    """Normalize Kite exchange-local timestamps to timezone-aware UTC."""
+    if value is None or not hasattr(value, "isoformat"):
+        return None
+    timestamp = (
+        value.to_pydatetime()
+        if isinstance(value, pd.Timestamp)
+        else value
+    )
+    if timestamp.tzinfo is None:
+        timestamp = timestamp.replace(tzinfo=IST)
+    return timestamp.astimezone(timezone.utc).isoformat()
 
 
 class ZerodhaDataSource(DataSource):
@@ -234,12 +250,14 @@ class ZerodhaDataSource(DataSource):
                 "tick_size": inst.get("tick_size"),
                 "tradingsymbol": inst.get("tradingsymbol"),
                 "instrument_token": inst.get("instrument_token"),
-                "quote_timestamp": (q.get("timestamp") or q.get("last_trade_time")).isoformat()
-                    if hasattr((q.get("timestamp") or q.get("last_trade_time")), "isoformat") else None,
+                "quote_timestamp": _exchange_timestamp_iso(
+                    q.get("timestamp") or q.get("last_trade_time")
+                ),
             })
             qts = q.get("timestamp") or q.get("last_trade_time")
-            if qts is not None and hasattr(qts, "isoformat"):
-                self._last_market_timestamp = qts.isoformat()
+            normalized_qts = _exchange_timestamp_iso(qts)
+            if normalized_qts is not None:
+                self._last_market_timestamp = normalized_qts
         return {"atm": atm, "spot": spot, "chain": chain, "expiry": str(nearest_expiry)}
 
     # ---- order placement -------------------------------------------------
