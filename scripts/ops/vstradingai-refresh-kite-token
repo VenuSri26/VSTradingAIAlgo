@@ -212,13 +212,7 @@ sleep 5
 
 
 
-health="$(
-
-    curl -fsS --max-time 20 \
-
-      http://127.0.0.1:8000/api/system/zerodha-health
-
-)"
+health="$(curl -fsS --max-time 20 http://127.0.0.1:8000/api/system/zerodha-health)"
 
 
 
