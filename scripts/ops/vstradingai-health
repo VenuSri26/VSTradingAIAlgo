@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -euo pipefail
+BASE="http://127.0.0.1:8000"
+PID="$(systemctl show -p MainPID --value vstradingai-api.service)"
+echo "SERVICE=$(systemctl is-active vstradingai-api.service)"
+echo "RELEASE=$(readlink -f /opt/vstradingai/current)"
+echo "PROCESS_CWD=$(readlink -f /proc/$PID/cwd 2>/dev/null || echo unavailable)"
+echo "COMMIT=$(cat /opt/vstradingai/current/RELEASE_COMMIT 2>/dev/null || echo missing)"
+grep '^LIVE_ORDERS_ENABLED=' /opt/vstradingai/shared/backend.env || true
+echo "ZERODHA_HEALTH:"
+curl -fsS --max-time 20 "$BASE/api/system/zerodha-health"; echo
+echo "LIVE_DATA_SUMMARY:"
+curl -fsS --max-time 20 "$BASE/api/live-data/status" | python3 -c 'import json,sys; d=json.load(sys.stdin); print({k:d.get(k) for k in ("running","connected","authenticated","last_poll_at","last_success_at","last_market_timestamp","last_error","consecutive_failures","fresh","safe_no_trade","message")})'

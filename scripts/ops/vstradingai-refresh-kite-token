@@ -1,0 +1,241 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+
+
+ENV_FILE="/opt/vstradingai/shared/backend.env"
+
+PYTHON="/opt/vstradingai/current/backend/.venv/bin/python"
+
+SERVICE="vstradingai-api.service"
+
+
+
+exec 9>/run/vstradingai-kite-auth.lock
+
+flock -n 9 || {
+
+    echo "ERROR: Another token refresh is running."
+
+    exit 1
+
+}
+
+
+
+"$PYTHON" - <<'PY'
+
+import os
+
+import shutil
+
+import tempfile
+
+from datetime import datetime, timezone
+
+from getpass import getpass
+
+from pathlib import Path
+
+from urllib.parse import parse_qs, urlparse
+
+
+
+from dotenv import dotenv_values, set_key
+
+from kiteconnect import KiteConnect
+
+
+
+env_file = Path("/opt/vstradingai/shared/backend.env")
+
+env = dotenv_values(env_file, interpolate=False)
+
+
+
+if (env.get("LIVE_ORDERS_ENABLED") or "").strip().lower() != "false":
+
+    raise SystemExit("STOP: LIVE_ORDERS_ENABLED must remain false.")
+
+
+
+api_key = (env.get("KITE_API_KEY") or "").strip()
+
+api_secret = (env.get("KITE_API_SECRET") or "").strip()
+
+
+
+if not api_key or not api_secret:
+
+    raise SystemExit("ERROR: Kite API key or secret is missing.")
+
+
+
+kite = KiteConnect(api_key=api_key, timeout=15)
+
+
+
+print("\nOpen this URL once and complete Zerodha login:\n")
+
+print(kite.login_url())
+
+print("\nCopy the FULL redirect URL from the browser address bar.\n")
+
+
+
+value = getpass("Paste full redirect URL here (hidden): ").strip()
+
+
+
+if "://" in value:
+
+    token = parse_qs(urlparse(value).query).get(
+
+        "request_token", [""]
+
+    )[0].strip()
+
+else:
+
+    token = value
+
+
+
+if not token:
+
+    raise SystemExit(
+
+        "ERROR: request_token not found; configuration unchanged."
+
+    )
+
+
+
+try:
+
+    session = kite.generate_session(token, api_secret=api_secret)
+
+    access_token = session["access_token"]
+
+    kite.set_access_token(access_token)
+
+    profile = kite.profile()
+
+
+
+    if not profile.get("user_id"):
+
+        raise RuntimeError("Profile verification failed")
+
+except Exception as exc:
+
+    raise SystemExit(
+
+        f"ERROR: {type(exc).__name__}: {exc}\n"
+
+        "Configuration unchanged."
+
+    )
+
+
+
+backup_root = Path("/opt/vstradingai/backups")
+
+backup_root.mkdir(parents=True, exist_ok=True)
+
+
+
+stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+backup_dir = Path(
+
+    tempfile.mkdtemp(prefix=f"kite-auth-{stamp}-", dir=backup_root)
+
+)
+
+backup_file = backup_dir / "backend.env"
+
+
+
+original = env_file.stat()
+
+shutil.copy2(env_file, backup_file)
+
+os.chmod(backup_file, 0o600)
+
+
+
+try:
+
+    set_key(
+
+        str(env_file),
+
+        "KITE_ACCESS_TOKEN",
+
+        access_token,
+
+        quote_mode="always",
+
+    )
+
+    os.chmod(env_file, original.st_mode & 0o777)
+
+    os.chown(env_file, original.st_uid, original.st_gid)
+
+except Exception:
+
+    shutil.copy2(backup_file, env_file)
+
+    raise
+
+
+
+print("PASS: token exchange")
+
+print("PASS: profile verification")
+
+print("PASS: credentials saved")
+
+print("PASS: live orders remain disabled")
+
+print("Backup:", backup_file)
+
+PY
+
+
+
+systemctl restart "$SERVICE"
+
+sleep 5
+
+
+
+health="$(
+
+    curl -fsS --max-time 20 \
+
+      http://127.0.0.1:8000/api/system/zerodha-health
+
+)"
+
+
+
+printf '%s\n' "$health"
+
+
+
+if printf '%s' "$health" | grep -q '"connected":true'; then
+
+    echo "PASS: Zerodha connected"
+
+    echo "PASS: LIVE_ORDERS_ENABLED=false"
+
+else
+
+    echo "ERROR: Service restarted but Zerodha is not connected."
+
+    exit 1
+
+fi
