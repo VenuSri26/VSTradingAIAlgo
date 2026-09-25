@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from app import store
-from app.paper_trade_management import ensure_management, evaluate, get_management, close_manually
+from app.paper_trade_management import ensure_management, evaluate, get_management, close_manually, record_monitor_outcome
 from app.config import settings
 
 
@@ -69,3 +69,26 @@ def test_manual_close_uses_partial_realized_pnl(tmp_path, monkeypatch):
     assert closed is not None
     assert closed["gross_pnl"] == (25 * settings.nifty_lot_size) + (10 * settings.nifty_lot_size)
     assert closed["exit_reason"] == "USER_EXIT"
+
+
+def test_record_monitor_outcome_persists_managed_event(tmp_path, monkeypatch):
+    # Coverage gap fill: record_monitor_outcome is the shared glue used by
+    # both live-tick monitoring paths (tick_bridge_routes.py and
+    # kite_ticker_runtime.py's default ingestor), previously duplicated in
+    # both places with no test covering either copy.
+    trade, tid = _open(tmp_path, monkeypatch, settings.nifty_lot_size)
+    result = record_monitor_outcome(trade, 121)
+    assert result["action"] == "MANAGED"
+    events = store.list_paper_monitor_events(tid)
+    assert events[0]["action"] == "MANAGED"
+    assert "STOP_TO_BREAKEVEN" in events[0]["detail"]
+
+
+def test_record_monitor_outcome_persists_closed_event_and_trade_result(tmp_path, monkeypatch):
+    trade, tid = _open(tmp_path, monkeypatch, settings.nifty_lot_size)
+    record_monitor_outcome(trade, 121)  # move to breakeven first
+    result = record_monitor_outcome(trade, 200)  # blow past target_2 -> CLOSED
+    assert result["action"] == "CLOSED"
+    events = store.list_paper_monitor_events(tid)
+    assert events[0]["action"] == "CLOSED"
+    assert store.get_open_paper_trade() is None

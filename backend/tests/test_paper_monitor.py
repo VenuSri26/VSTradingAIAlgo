@@ -5,6 +5,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app import store
+from app.config import settings
 from app.paper_monitor import monitor_once
 
 
@@ -24,6 +25,10 @@ def _payload():
 
 def _open_trade(tmp_path, monkeypatch):
     monkeypatch.setattr(store, "DB_PATH", str(tmp_path / "monitor.db"))
+    # Isolate the notification outbox too: monitor_once writes MANAGED/CLOSED
+    # events straight to settings.paper_notification_path, which otherwise
+    # defaults to the real backend/data/paper_notifications.jsonl file.
+    monkeypatch.setattr(settings, "paper_notification_path", str(tmp_path / "notifications.jsonl"))
     setup_id = store.create_trade_setup("monitor-1", _payload())
     store.review_trade_setup(setup_id, "APPROVED", "ok")
     return store.open_paper_trade(setup_id, 75, 100, 0)

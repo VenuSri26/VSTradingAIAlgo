@@ -179,3 +179,20 @@ def close_manually(trade: dict[str, Any], current_price: float, reason: str = "M
         state["last_action"] = reason
         _persist(state)
     return closed
+
+
+def record_monitor_outcome(trade: dict[str, Any], current_price: float) -> dict[str, Any]:
+    """Evaluate a trade against a fresh price and persist the outcome.
+
+    Shared by both live-tick monitoring paths (`app.tick_bridge_routes` and
+    `app.kite_ticker_runtime`'s default tick ingestor), which previously each
+    carried their own copy of this exact glue with no test covering either.
+    Records the monitor event and, on a full close, the trade result used for
+    the learning engine's win/loss tally.
+    """
+    result = evaluate(trade, current_price)
+    detail = ",".join(result.get("actions") or []) or result.get("reason")
+    store.record_paper_monitor_event(trade["id"], current_price, result["action"], detail)
+    if result["action"] == "CLOSED" and result.get("net_pnl") is not None:
+        store.record_trade_result(result["net_pnl"], "B")
+    return result

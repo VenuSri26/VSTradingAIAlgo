@@ -5,9 +5,13 @@ from pydantic import BaseModel, Field
 
 from app.config import settings
 from app.live_intelligence_history import trend
-from app.live_paper_bridge import build_paper_setup_candidate
+from app.live_paper_bridge import (
+    PaperSetupNotReady,
+    build_paper_setup_candidate,
+    prepare_paper_setup_from_preview,
+    validate_confirmation_text,
+)
 from app.routes import get_data_source
-from app import store
 
 router = APIRouter()
 
@@ -44,35 +48,12 @@ def preview_live_paper_setup(atm_range: int = 8, max_age_sec: int = 30):
 
 @router.post("/api/live-paper/prepare", dependencies=[Depends(require_admin_token)])
 def prepare_live_paper_setup(body: PrepareRequest):
-    if body.confirmation_text != "PREPARE_PAPER_SETUP":
-        raise HTTPException(status_code=409, detail="Type PREPARE_PAPER_SETUP to create a draft")
-    snapshot, result = _preview(body.atm_range, body.max_age_sec)
-    if result["status"] != "READY_FOR_HUMAN_REVIEW":
-        raise HTTPException(status_code=409, detail=result)
-    c = result["candidate"]
-    payload = {
-        "timestamp": c["captured_at"],
-        "decision": {
-            "decision": c["decision"],
-            "grade": c["grade"],
-            "alignment_score": c["alignment_score"],
-            "explanation": "; ".join(c["rationale"]),
-            "plan": {
-                "option_type": c["option_type"], "strike": c["strike"],
-                "entry_low": c["entry_low"], "entry_high": c["entry_high"],
-                "stop_loss": c["stop_loss"], "target_1": c["target_1"],
-                "target_2": c["target_2"], "risk_reward": c["risk_reward"],
-            },
-        },
-        "live_intelligence": result["intelligence"],
-        "live_trend": result["trend"],
-        "source": "LIVE_PAPER_BRIDGE",
-        "execution_mode": "PAPER_ONLY",
-    }
-    setup_id = store.create_trade_setup(result["signature"], payload)
-    if setup_id is None:
-        matches = store.list_trade_setups(limit=20)
-        existing = next((x for x in matches if x.get("signature") == result["signature"]), None)
-        return {"created": False, "reason": "DUPLICATE", "setup": existing, **result}
-    setup = store.get_trade_setup(setup_id)
-    return {"created": True, "setup": setup, **result}
+    try:
+        validate_confirmation_text(body.confirmation_text)
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    _, result = _preview(body.atm_range, body.max_age_sec)
+    try:
+        return prepare_paper_setup_from_preview(result)
+    except PaperSetupNotReady as e:
+        raise HTTPException(status_code=409, detail=e.result)

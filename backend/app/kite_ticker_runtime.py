@@ -129,7 +129,7 @@ class KiteTickerRuntime:
     def _default_ingest(tick: dict[str, Any]) -> dict[str, Any]:
         from app import store
         from app.live_market_stream import get_live_market_stream
-        from app.paper_trade_management import evaluate
+        from app.paper_trade_management import record_monitor_outcome
         from app.tick_bridge import get_tick_bridge
 
         stream_result = get_live_market_stream().ingest(tick)
@@ -138,16 +138,8 @@ class KiteTickerRuntime:
         if str(tick.get("option_type") or "").upper() not in {"CE", "PE"}:
             return stream_result
 
-        def monitor(trade: dict, price: float):
-            result = evaluate(trade, price)
-            detail = ",".join(result.get("actions") or []) or result.get("reason")
-            store.record_paper_monitor_event(trade["id"], price, result["action"], detail)
-            if result["action"] == "CLOSED" and result.get("net_pnl") is not None:
-                store.record_trade_result(result["net_pnl"], "B")
-            return result
-
         return get_tick_bridge(settings.tick_bridge_history_path).ingest(
-            tick, open_trade=store.get_open_paper_trade(), monitor=monitor
+            tick, open_trade=store.get_open_paper_trade(), monitor=record_monitor_outcome
         )
 
     def _connect(self) -> None:
