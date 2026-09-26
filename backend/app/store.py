@@ -370,6 +370,26 @@ def list_paper_automation_runs(limit: int = 50) -> list[dict]:
     return result
 
 
+def paper_automation_summary(trading_day: str | None = None) -> dict:
+    """Return restart-safe automation totals from SQLite."""
+    day = trading_day or _today()
+    with _conn() as conn:
+        rows = conn.execute(
+            """SELECT action, COUNT(*) AS count
+               FROM paper_automation_runs WHERE trading_day = ? GROUP BY action""",
+            (day,),
+        ).fetchall()
+    counts = {row["action"]: row["count"] for row in rows}
+    return {
+        "trading_day": day,
+        "recorded_cycles": sum(counts.values()),
+        "paper_trades_opened": counts.get("PAPER_TRADE_OPENED", 0),
+        "blocked": counts.get("BLOCKED", 0),
+        "no_trade": counts.get("NO_TRADE", 0),
+        "actions": counts,
+    }
+
+
 def has_paper_automation_cycle(cycle_key: str) -> bool:
     with _conn() as conn:
         row = conn.execute(

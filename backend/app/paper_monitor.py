@@ -49,19 +49,45 @@ def _write_notification(event: dict[str, Any]) -> None:
 
 
 def _is_eod(now: datetime | None = None) -> bool:
-    local_now = now or datetime.now(ZoneInfo(settings.app_timezone))
+    local_now = now or datetime.now(timezone.utc)
+    if local_now.tzinfo is None:
+        # Preserve compatibility for callers supplying an explicit local wall
+        # clock while ensuring production's aware UTC timestamps are converted.
+        local_now = local_now.replace(tzinfo=ZoneInfo(settings.app_timezone))
+    else:
+        local_now = local_now.astimezone(ZoneInfo(settings.app_timezone))
     hh, mm = [int(x) for x in settings.paper_eod_exit_time.split(":", 1)]
     return (local_now.hour, local_now.minute) >= (hh, mm)
 
 
-def _option_price(data_source: Any, trade: dict[str, Any]) -> tuple[float, str | None]:
+def _quote_age_seconds(raw: str | None, now: datetime) -> float:
+    if not raw:
+        raise RuntimeError("Option quote timestamp is missing")
+    try:
+        quoted_at = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError("Option quote timestamp is invalid") from exc
+    if quoted_at.tzinfo is None:
+        raise RuntimeError("Option quote timestamp must include timezone")
+    age = (now.astimezone(timezone.utc) - quoted_at.astimezone(timezone.utc)).total_seconds()
+    if age < -5:
+        raise RuntimeError(f"Option quote timestamp is in the future ({age:.1f}s)")
+    if age > settings.paper_monitor_max_age_sec:
+        raise RuntimeError(
+            f"Option quote is stale ({age:.1f}s > {settings.paper_monitor_max_age_sec:.1f}s)"
+        )
+    return max(0.0, age)
+
+
+def _option_price(data_source: Any, trade: dict[str, Any], now: datetime) -> tuple[float, str, float]:
     snapshot = data_source.get_option_chain(atm_range=20)
     legs = snapshot.get("chain", {}).get(trade["option_type"], [])
     leg = next((item for item in legs if int(item.get("strike", -1)) == int(trade["strike"])), None)
     if not leg or leg.get("ltp") is None:
         raise RuntimeError(f"No {trade['option_type']} quote for strike {trade['strike']}")
     timestamp = leg.get("quote_timestamp") or snapshot.get("timestamp")
-    return float(leg["ltp"]), timestamp
+    age = _quote_age_seconds(timestamp, now)
+    return float(leg["ltp"]), str(timestamp), age
 
 
 def _close_if_required(trade: dict[str, Any], current_price: float, force_eod: bool = False) -> dict[str, Any]:
@@ -88,6 +114,7 @@ def _close_if_required(trade: dict[str, Any], current_price: float, force_eod: b
 
 
 def monitor_once(data_source: Any, now: datetime | None = None) -> dict[str, Any]:
+    now = now or datetime.now(timezone.utc)
     trade = store.get_open_paper_trade()
     with _lock:
         _state.iterations += 1
@@ -100,7 +127,7 @@ def monitor_once(data_source: Any, now: datetime | None = None) -> dict[str, Any
         return {"action": "NONE", "detail": "No open paper trade"}
 
     try:
-        current_price, quote_timestamp = _option_price(data_source, trade)
+        current_price, quote_timestamp, quote_age_sec = _option_price(data_source, trade, now)
         result = _close_if_required(trade, current_price, force_eod=_is_eod(now))
         with _lock:
             _state.successful_quotes += 1
@@ -108,6 +135,7 @@ def monitor_once(data_source: Any, now: datetime | None = None) -> dict[str, Any
             _state.last_action = result["action"]
             _state.last_error = None
         result["quote_timestamp"] = quote_timestamp
+        result["quote_age_sec"] = round(quote_age_sec, 3)
         return result
     except Exception as exc:
         message = str(exc)
@@ -125,6 +153,7 @@ def status_snapshot() -> dict[str, Any]:
     with _lock:
         return {**asdict(_state), "enabled": settings.paper_auto_monitor_enabled,
                 "interval_sec": settings.paper_monitor_interval_sec,
+                "max_quote_age_sec": settings.paper_monitor_max_age_sec,
                 "eod_exit_time": settings.paper_eod_exit_time,
                 "execution_mode": "PAPER_ONLY"}
 

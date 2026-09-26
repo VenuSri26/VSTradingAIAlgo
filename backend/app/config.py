@@ -56,6 +56,7 @@ class Settings:
     # Restart-safe automated paper monitoring. This never places broker orders.
     paper_auto_monitor_enabled: bool = os.getenv("PAPER_AUTO_MONITOR_ENABLED", "true").lower() in ("1", "true", "yes", "on")
     paper_monitor_interval_sec: float = float(os.getenv("PAPER_MONITOR_INTERVAL_SEC", "5"))
+    paper_monitor_max_age_sec: float = float(os.getenv("PAPER_MONITOR_MAX_AGE_SEC", "30"))
     paper_eod_exit_time: str = os.getenv("PAPER_EOD_EXIT_TIME", "15:20")
     paper_notification_path: str = os.getenv("PAPER_NOTIFICATION_PATH", "./data/paper_notifications.jsonl")
 
@@ -221,6 +222,8 @@ def validate(settings_obj: Settings = settings) -> list[str]:
         problems.append("MAX_CONSECUTIVE_LOSSES must be >= 1")
     if settings_obj.risk_cooldown_minutes < 0:
         problems.append("RISK_COOLDOWN_MINUTES must be >= 0")
+    if settings_obj.paper_monitor_max_age_sec <= 0:
+        problems.append("PAPER_MONITOR_MAX_AGE_SEC must be > 0")
     if not 1 <= settings_obj.max_capital_utilization_pct <= 100:
         problems.append("MAX_CAPITAL_UTILIZATION_PCT must be between 1 and 100")
     if settings_obj.poll_interval_sec < 1:

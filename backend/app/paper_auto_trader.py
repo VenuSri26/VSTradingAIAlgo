@@ -204,6 +204,7 @@ def status_snapshot() -> dict[str, Any]:
             "minimum_score": settings.paper_auto_trader_min_score,
             "allowed_grades": settings.paper_auto_trader_grades,
             "execution_mode": "PAPER_ONLY", "live_orders_enabled": False,
+            "persistent_today": store.paper_automation_summary(),
             "recent_runs": store.list_paper_automation_runs(limit=10)}
 
 
