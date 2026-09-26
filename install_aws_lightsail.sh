@@ -118,7 +118,21 @@ nginx -t
 systemctl daemon-reload
 systemctl enable vstradingai-api nginx
 systemctl restart vstradingai-api nginx
-sleep 3
+PRODUCTION_READY=false
+for _ in $(seq 1 30); do
+  if curl -fsS --max-time 3 http://127.0.0.1:8000/healthz >/dev/null 2>&1; then
+    PRODUCTION_READY=true
+    break
+  fi
+  sleep 1
+done
+if [[ "$PRODUCTION_READY" != true ]]; then
+  echo 'Production service did not become ready within 30 seconds; rolling back.' >&2
+  journalctl -u vstradingai-api.service -n 100 --no-pager -l >&2 || true
+  cp -a "$ENV_BACKUP" "$APP_ROOT/shared/backend.env"
+  if [[ -n "$PREVIOUS" && -d "$PREVIOUS" ]]; then ln -sfn "$PREVIOUS" "$CURRENT"; systemctl restart vstradingai-api nginx; fi
+  exit 1
+fi
 if ! "$CURRENT/post_deploy_smoke_test.sh"; then
   echo 'Production smoke test failed; rolling back.' >&2
   cp -a "$ENV_BACKUP" "$APP_ROOT/shared/backend.env"

@@ -32,6 +32,8 @@ write to the paper ledger. It contains no broker order placement path.
 - Candidate smoke-test processes force the autonomous worker off.
 - A failed deployment restores the previous shared build metadata before the
   previous release is restarted.
+- Production cutover now waits up to 30 seconds for `/healthz`, avoiding a
+  false rollback while systemd/Uvicorn is still starting.
 
 ## Activation
 
