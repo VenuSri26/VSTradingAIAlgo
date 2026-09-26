@@ -1,5 +1,5 @@
 import type { LiveDecisionResponse } from "../types/decision";
-import type { AgentRegistry, DecisionReplay, DeploymentSnapshot, LogEntry, OperationalAlert, OperationsSystem, PaperAnalytics, PaperPortfolioSummary, PaperTrade, ReplayListItem, RiskStatus, StrategyLabResult, SystemMetrics, TradeSetup, TradeTimeline, VersionInfo, ZerodhaHealth, ReleaseCertificate, DecisionExplanation, InstitutionalFlowSummary, InstitutionalFlowTrend, InstitutionalFlowPoint, DecisionIntelligence, AICommandCenter, ProductionCandidateStatus, ResilienceStatus, OpenPaperManagement, PaperAutomationStatus, PaperMonitorStatus, PaperDailySummary, PaperLoopReadiness } from "../types/operations";
+import type { AgentRegistry, DecisionReplay, DeploymentSnapshot, LogEntry, OperationalAlert, OperationsSystem, PaperAnalytics, PaperPortfolioSummary, PaperTrade, ReplayListItem, RiskStatus, StrategyLabResult, SystemMetrics, TradeSetup, TradeTimeline, VersionInfo, ZerodhaHealth, ReleaseCertificate, DecisionExplanation, InstitutionalFlowSummary, InstitutionalFlowTrend, InstitutionalFlowPoint, DecisionIntelligence, AICommandCenter, ProductionCandidateStatus, ResilienceStatus, OpenPaperManagement, PaperAutomationStatus, PaperMonitorStatus, PaperDailySummary, PaperLoopReadiness, TradingReportStatus } from "../types/operations";
 
 const BASE_URL =
   import.meta.env.VITE_API_BASE_URL?.trim() || window.location.origin;
@@ -39,6 +39,7 @@ export const api = {
   getPaperMonitorStatus: () => requestJSON<PaperMonitorStatus>("/api/paper/monitor/status"),
   getPaperDailySummary: () => requestJSON<PaperDailySummary>("/api/paper/daily-summary"),
   getPaperLoopReadiness: () => requestJSON<PaperLoopReadiness>("/api/paper/readiness"),
+  getTradingReportStatus: () => requestJSON<TradingReportStatus>("/api/trading-reports/status"),
   executePaper: (setup_id: number, entry_price: number, quantity: number | undefined, token: string) =>
     requestJSON<Record<string, unknown>>("/api/paper/execute", { method: "POST", headers: adminHeaders(token), body: JSON.stringify({setup_id, entry_price, ...(quantity ? {quantity} : {})}) }),
   monitorPaper: (current_price: number, force_eod: boolean, token: string) =>

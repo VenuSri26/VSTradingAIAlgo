@@ -7,6 +7,7 @@ import type {
   PaperLoopReadiness,
   PaperMonitorStatus,
   PaperTrade,
+  TradingReportStatus,
   ZerodhaHealth,
 } from "../types/operations";
 
@@ -27,17 +28,19 @@ export function PaperAutomationPage() {
   const [summary, setSummary] = useState<PaperDailySummary | null>(null);
   const [trades, setTrades] = useState<PaperTrade[]>([]);
   const [readiness, setReadiness] = useState<PaperLoopReadiness | null>(null);
+  const [reports, setReports] = useState<TradingReportStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const [auto, mon, broker, day, journal, certificate] = await Promise.all([
+      const [auto, mon, broker, day, journal, certificate, reportStatus] = await Promise.all([
         api.getPaperAutomationStatus(), api.getPaperMonitorStatus(), api.getZerodhaHealth(),
-        api.getPaperDailySummary(), api.getPaperTrades(), api.getPaperLoopReadiness(),
+        api.getPaperDailySummary(), api.getPaperTrades(), api.getPaperLoopReadiness(), api.getTradingReportStatus(),
       ]);
       setAutomation(auto); setMonitor(mon); setHealth(broker); setSummary(day);
-      setTrades(journal.trades); setReadiness(certificate); setUpdatedAt(new Date().toISOString()); setError(null);
+      setTrades(journal.trades); setReadiness(certificate); setReports(reportStatus);
+      setUpdatedAt(new Date().toISOString()); setError(null);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     }
@@ -158,6 +161,33 @@ export function PaperAutomationPage() {
             <td>{trade.quantity}</td><td>₹{trade.entry_price}</td><td>{trade.status}</td>
             <td className={(trade.net_pnl ?? 0) >= 0 ? "positive" : "negative"}>{trade.net_pnl == null ? "—" : `₹${trade.net_pnl.toFixed(2)}`}</td>
             <td>{trade.exit_reason ?? "—"}</td></tr>)}</tbody>
+      </table></div>
+    </PageCard>
+
+    <PageCard title="Pre/Post-Market Reports & Zerodha Reconciliation" accent="#c084fc">
+      <div className="metric-grid journal-summary">
+        <div className="metric-card"><span>Pre-market schedule</span><strong>{reports?.schedulers.pre_market.configured_time ?? "09:00"} IST</strong></div>
+        <div className="metric-card"><span>Post-market schedule</span><strong>{reports?.schedulers.post_market.configured_time ?? "15:40"} IST</strong></div>
+        <div className="metric-card"><span>Latest paper P&amp;L</span><strong>₹{(reports?.post_market?.summary.paper_net_pnl ?? 0).toFixed(2)}</strong></div>
+        <div className="metric-card"><span>Zerodha orders observed</span><strong>{reports?.post_market?.summary.zerodha_orders ?? 0}</strong></div>
+      </div>
+      <div className="two-column-grid">
+        <div className="readiness-check"><span className={reports?.pre_market ? "positive" : ""}>{reports?.pre_market ? "✓" : "○"}</span><div>
+          <strong>Pre-market analysis</strong><small>{reports?.pre_market?.analysis.message ?? "Will be generated automatically on the next trading day."}</small>
+        </div></div>
+        <div className="readiness-check"><span className={reports?.post_market ? "positive" : ""}>{reports?.post_market ? "✓" : "○"}</span><div>
+          <strong>Post-market analysis</strong><small>{reports?.post_market?.analysis.message ?? "Will reconcile recommendations, paper results and read-only broker observations."}</small>
+        </div></div>
+      </div>
+      <p className="muted-text">Zerodha access on this page is read-only. Manual broker orders are shown as unmatched observations; they are never copied into paper trading and this page cannot place an order.</p>
+      <div className="table-scroll"><table className="data-table">
+        <thead><tr><th>Setup</th><th>Recommendation</th><th>Grade / score</th><th>Paper trade</th><th>Zerodha match</th></tr></thead>
+        <tbody>{!reports?.post_market?.lineage.length
+          ? <tr><td colSpan={5} className="empty-cell">No completed post-market lineage report yet.</td></tr>
+          : reports.post_market.lineage.map(row => <tr key={row.setup_id}><td>#{row.setup_id} {row.contract}</td>
+            <td>{row.recommendation}</td><td>{row.grade} / {row.score}</td>
+            <td>{row.paper_trade_id ? `#${row.paper_trade_id} ${row.paper_status}` : "Not opened"}</td>
+            <td>{row.broker_order_id ? `${row.broker_order_id} ${row.broker_status ?? ""}` : "No match"}</td></tr>)}</tbody>
       </table></div>
     </PageCard>
 

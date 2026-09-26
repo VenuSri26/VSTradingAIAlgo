@@ -141,6 +141,11 @@ class Settings:
     daily_digest_time: str = os.getenv("DAILY_DIGEST_TIME", "16:00")
     daily_digest_poll_interval_sec: float = float(os.getenv("DAILY_DIGEST_POLL_INTERVAL_SEC", "60"))
     daily_digest_enqueue: bool = os.getenv("DAILY_DIGEST_ENQUEUE", "true").lower() in ("1", "true", "yes", "on")
+    trading_report_path: str = os.getenv("TRADING_REPORT_PATH", "./data/trading_reports.jsonl")
+    trading_report_scheduler_enabled: bool = os.getenv("TRADING_REPORT_SCHEDULER_ENABLED", "true").lower() in ("1", "true", "yes", "on")
+    pre_market_report_time: str = os.getenv("PRE_MARKET_REPORT_TIME", "09:00")
+    post_market_report_time: str = os.getenv("POST_MARKET_REPORT_TIME", "15:40")
+    trading_report_poll_interval_sec: float = float(os.getenv("TRADING_REPORT_POLL_INTERVAL_SEC", "60"))
     live_session_validation_path: str = os.getenv("LIVE_SESSION_VALIDATION_PATH", "./data/live_session_validation.jsonl")
     live_session_min_samples: int = int(os.getenv("LIVE_SESSION_MIN_SAMPLES", "20"))
     live_session_min_ready_ratio: float = float(os.getenv("LIVE_SESSION_MIN_READY_RATIO", "0.95"))
@@ -292,6 +297,18 @@ def validate(settings_obj: Settings = settings) -> list[str]:
         problems.append("NOTIFICATION_RETRY_MAX_SEC must be >= NOTIFICATION_RETRY_BASE_SEC")
     if settings_obj.daily_digest_poll_interval_sec < 10:
         problems.append("DAILY_DIGEST_POLL_INTERVAL_SEC must be >= 10")
+    if settings_obj.trading_report_poll_interval_sec < 10:
+        problems.append("TRADING_REPORT_POLL_INTERVAL_SEC must be >= 10")
+    for variable, value in (
+        ("PRE_MARKET_REPORT_TIME", settings_obj.pre_market_report_time),
+        ("POST_MARKET_REPORT_TIME", settings_obj.post_market_report_time),
+    ):
+        try:
+            hh, mm = [int(x) for x in value.split(":", 1)]
+            if not (0 <= hh <= 23 and 0 <= mm <= 59):
+                raise ValueError
+        except (TypeError, ValueError):
+            problems.append(f"{variable} must use HH:MM 24-hour format")
     try:
         hh, mm = [int(x) for x in settings_obj.daily_digest_time.split(":", 1)]
         if not (0 <= hh <= 23 and 0 <= mm <= 59):

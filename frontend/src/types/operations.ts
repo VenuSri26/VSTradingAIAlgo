@@ -158,3 +158,21 @@ export interface PaperLoopReadiness {
   runtime:{automation_running:boolean;monitor_running:boolean;last_action:string|null;last_reason:string|null};
   execution_mode:"PAPER_ONLY"; live_orders_enabled:boolean; recommended_action:string;
 }
+export interface TradingReport {
+  report_type:"PRE_MARKET"|"POST_MARKET"; generated_at:string; trading_day:string;
+  analysis:{status:string;message:string};
+  summary:{recommendations:number;decision_cycles:number;paper_trades:number;paper_open:number;
+    paper_net_pnl:number;zerodha_orders:number;zerodha_trades:number;unmatched_zerodha_orders:number;
+    application_execution_orders:number};
+  lineage:Array<{setup_id:number;recommendation:string;grade:string;score:number;contract:string;
+    setup_status:string;paper_trade_id:number|null;paper_status:string|null;
+    broker_order_id:string|null;broker_status:string|null;broker_match:string;execution_id:string|null}>;
+  unmatched_zerodha_orders:Array<Record<string,unknown>>;
+  safety:{execution_mode:string;live_orders_enabled:boolean;broker_access:string};
+}
+export interface TradingReportStatus {
+  pre_market:TradingReport|null; post_market:TradingReport|null;
+  schedulers:{pre_market:{configured_time:string;last_run_at:string|null;last_error:string|null};
+    post_market:{configured_time:string;last_run_at:string|null;last_error:string|null}};
+  execution_mode:"PAPER_ONLY"; live_orders_enabled:false;
+}

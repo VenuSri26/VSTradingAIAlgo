@@ -40,6 +40,9 @@ def paper_loop_readiness() -> dict[str, Any]:
 
     notification_parent = Path(settings.paper_notification_path).parent
     notification_ok = notification_parent.exists() and notification_parent.is_dir()
+    reporting_parent = Path(settings.trading_report_path).parent
+    reporting_ok = (settings.trading_report_scheduler_enabled and reporting_parent.exists()
+                    and reporting_parent.is_dir())
     checks = [
         _check("CONFIG", "Configuration is valid", not problems,
                "No configuration problems" if not problems else "; ".join(problems)),
@@ -59,6 +62,8 @@ def paper_loop_readiness() -> dict[str, Any]:
         _check("PERSISTENCE", "Persistent automation audit", persistence_ok, persistence_detail),
         _check("NOTIFICATION_PATH", "Paper event path", notification_ok,
                f"notification directory={notification_parent}"),
+        _check("DAILY_REPORTING", "Pre/post-market reporting", reporting_ok,
+               f"pre={settings.pre_market_report_time}; post={settings.post_market_report_time}; directory={reporting_parent}"),
     ]
     pending_live = [
         "Fresh authenticated Zerodha market data",

@@ -1,5 +1,16 @@
 # Changelog
 
+## 7.8.1-paper-rc1 - 2026-09-26
+
+- Added trading-day-only pre-market and post-market report schedulers.
+- Unified recommendations, autonomous decisions, paper outcomes and read-only
+  Zerodha orders/trades/positions in persistent daily reports.
+- Added durable execution-ledger correlation and explicit unmatched broker
+  order visibility for manual/external orders.
+- Added report APIs and a mobile-friendly reconciliation panel to Auto Paper.
+- Kept all report paths read-only with respect to broker execution.
+- Expanded deployment smoke tests and candidate-process isolation.
+
 ## 7.8.0-paper-rc1 - 2026-09-26
 
 - Added an opt-in autonomous paper-only decision and entry worker.

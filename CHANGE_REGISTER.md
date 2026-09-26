@@ -1,4 +1,26 @@
 
+## CR-2026-09-26-0781 — v7.8.1 Reporting and Reconciliation
+
+| Field | Record |
+|---|---|
+| Date | 2026-09-26 |
+| Version | 7.8.1-paper-rc1 |
+| Category | Pre-market reporting, post-market reporting, broker reconciliation |
+| Problem / objective | Make the full daily lifecycle visible: recommendations, autonomous decisions, paper orders/results and any Nifty orders observed in Zerodha |
+| Files and modules changed | Trading-report service/routes/scheduler, application lifecycle, configuration, Auto Paper frontend, smoke tests, release documentation and tests |
+| Implementation summary | Added trading-day-only 09:00 IST pre-market and 15:40 IST post-market reports, persistent JSONL history, read-only Zerodha observations, execution-ledger correlation and unmatched manual-order visibility |
+| Trading logic impact | None; reports observe existing decisions and ledgers and cannot open or close positions |
+| Zerodha compatibility impact | Additive read-only calls to profile, orders, trades and positions; broker payload persistence uses a field allowlist |
+| API / database compatibility impact | Additive `/api/trading-reports/*` endpoints; no database migration or existing API removal |
+| Configuration changes | Added `TRADING_REPORT_*`, `PRE_MARKET_REPORT_TIME` and `POST_MARKET_REPORT_TIME`; defaults enable reporting while keeping live orders disabled |
+| Tests executed | Complete backend pytest suite, production frontend TypeScript/Vite build, FastAPI route startup probe and Git whitespace check |
+| Test results | 260 backend tests passed; frontend production build passed; `/api/trading-reports/status` returned HTTP 200 |
+| AWS deployment notes | Candidate process disables report schedulers; production smoke requires readiness and report status endpoints; report history resides under shared data |
+| Rollback procedure | Repoint `/opt/vstradingai/current` to the previous release and restart `vstradingai-api.service`; no schema rollback is required |
+| Known limitations | Actual strategy quality still requires live-session evidence; manual Zerodha orders without a VST execution tag remain intentionally unmatched |
+| Pending follow-up | Monday token refresh, pre-market report observation, live paper lifecycle and post-market reconciliation verification |
+| Approver / verifier | Pending AWS verification |
+
 ## 1.9.0 - 2026-08-02
 
 - Added restart-safe automated paper-trade monitoring.
