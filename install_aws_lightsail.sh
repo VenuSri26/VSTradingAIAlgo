@@ -22,7 +22,10 @@ if [[ -n "$PREVIOUS" && -x "$PREVIOUS/backup_aws_lightsail.sh" ]]; then
   APP_DIR="$PREVIOUS" "$PREVIOUS/backup_aws_lightsail.sh" pre-deploy
 fi
 
-rsync -a --exclude='.git/' --exclude='.env' --exclude='.venv/' --exclude='node_modules/' --exclude='dist/' --exclude='__pycache__/' --exclude='.pytest_cache/' --exclude='*.db' --exclude='*.sqlite3' --exclude='*.jsonl' --exclude='*.log' "$SOURCE_DIR/" "$RELEASE_DIR/"
+# Runtime state must never be copied into an immutable release. Excluding the
+# directories themselves also guarantees the following symlinks are created at
+# the intended paths rather than nested as backend/data/data or deployment/deployment.
+rsync -a --exclude='.git/' --exclude='.env' --exclude='.venv/' --exclude='node_modules/' --exclude='dist/' --exclude='__pycache__/' --exclude='.pytest_cache/' --exclude='backend/data/' --exclude='deployment/' --exclude='*.db' --exclude='*.sqlite3' --exclude='*.jsonl' --exclude='*.log' "$SOURCE_DIR/" "$RELEASE_DIR/"
 ln -sfn "$APP_ROOT/shared/data" "$RELEASE_DIR/backend/data"
 ln -sfn "$APP_ROOT/shared/deployment" "$RELEASE_DIR/deployment"
 if [[ ! -f "$APP_ROOT/shared/backend.env" ]]; then

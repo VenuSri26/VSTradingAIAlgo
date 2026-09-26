@@ -18,6 +18,8 @@ write to the paper ledger. It contains no broker order placement path.
 - Explicit health fields for market-data mode, execution mode and live-order
   state.
 - Shared SQLite/runtime path examples for release-safe persistence.
+- Release installer excludes runtime directories before creating shared-state
+  symlinks, preventing nested data/deployment links.
 
 ## Safety invariants
 

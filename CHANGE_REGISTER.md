@@ -24,7 +24,7 @@
 | Configuration changes | New `PAPER_AUTO_TRADER_*` variables; shared production paths documented; `LIVE_ORDERS_ENABLED=false` remains mandatory |
 | Tests executed | Python compile, focused offline suite, complete offline-compatible suite, Git whitespace check, shell syntax checks |
 | Test results | Focused 20/20 passed; complete offline-compatible run 218 passed with 7 environment/shim limitations (real pytest/FastAPI/httpx unavailable locally) |
-| AWS deployment notes | Deploy disabled, run real 246+ suite, verify status, then explicitly enable the paper worker; candidate port 8001 forces the worker off |
+| AWS deployment notes | Deploy disabled, run real 246+ suite, verify status, then explicitly enable the paper worker; candidate port 8001 forces the worker off; runtime directories are excluded before shared symlinks are created |
 | Rollback procedure | Point `/opt/vstradingai/current` to the previous release and restart `vstradingai-api.service`; migration 008 is additive |
 | Known limitations | Live-session validation and sufficient OI/PCR samples are still required; ₹10,000 paper capital may legitimately block a full Nifty lot under the configured risk cap |
 | Pending follow-up | Monday live-session certification, mobile dashboard presentation and notification delivery |
