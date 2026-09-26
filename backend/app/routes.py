@@ -224,11 +224,27 @@ def post_smart_money_analysis(payload: dict):
 def get_institutional_flow_summary(atm_range: int = 8):
     if atm_range < 2 or atm_range > 20:
         raise HTTPException(status_code=422, detail="atm_range must be between 2 and 20")
-    ds = get_data_source()
-    option_summary = analyse_option_chain(ds.get_option_chain(atm_range=atm_range))
-    summary = analyse_institutional_flow(option_summary)
-    snapshot = record_flow_snapshot(summary, option_summary)
-    return {**summary, "snapshot_id": snapshot["id"], "captured_at": snapshot["captured_at"], "anomaly": snapshot["anomaly"]}
+    try:
+        ds = get_data_source()
+        option_summary = analyse_option_chain(ds.get_option_chain(atm_range=atm_range))
+        summary = analyse_institutional_flow(option_summary)
+        snapshot = record_flow_snapshot(summary, option_summary)
+        return {**summary, "status": "READY", "snapshot_id": snapshot["id"],
+                "captured_at": snapshot["captured_at"], "anomaly": snapshot["anomaly"]}
+    except Exception as exc:
+        # Broker authentication and transport failures are operational states,
+        # not application crashes. Fail closed so callers and deployment smoke
+        # tests receive an explicit NO_TRADE response.
+        return {
+            "status": "BLOCKED",
+            "recommended_action": "NO_TRADE",
+            "execution_mode": "DECISION_SUPPORT_ONLY",
+            "live_orders_enabled": False,
+            "institutional_bias": "UNKNOWN",
+            "confidence": 0.0,
+            "warnings": [f"Institutional-flow data unavailable ({type(exc).__name__})"],
+            "error_code": "MARKET_DATA_UNAVAILABLE",
+        }
 
 
 @router.post("/api/institutional-flow/analyse")

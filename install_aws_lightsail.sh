@@ -11,6 +11,7 @@ APP_ENVIRONMENT="${APP_ENVIRONMENT:-production}"
 RELEASE_DIR="$APP_ROOT/releases/${VERSION}-${STAMP}"
 CURRENT="$APP_ROOT/current"
 PREVIOUS="$(readlink -f "$CURRENT" 2>/dev/null || true)"
+ENV_BACKUP="$(mktemp /tmp/vstradingai-backend-env.XXXXXX)"
 
 [[ $EUID -eq 0 ]] || { echo 'Run with sudo' >&2; exit 1; }
 "$SOURCE_DIR/preflight_aws_lightsail.sh"
@@ -32,16 +33,7 @@ if [[ ! -f "$APP_ROOT/shared/backend.env" ]]; then
   cp "$RELEASE_DIR/backend/.env.example" "$APP_ROOT/shared/backend.env"
   chmod 600 "$APP_ROOT/shared/backend.env"
 fi
-# Keep the shared environment version aligned without changing secrets.
-if grep -q '^APP_VERSION=' "$APP_ROOT/shared/backend.env"; then
-  sed -i "s/^APP_VERSION=.*/APP_VERSION=$VERSION/" "$APP_ROOT/shared/backend.env"
-else
-  printf '\nAPP_VERSION=%s\n' "$VERSION" >> "$APP_ROOT/shared/backend.env"
-fi
-for pair in "BUILD_ID=$BUILD_ID" "BUILD_TIME=$STAMP" "GIT_COMMIT=$GIT_COMMIT" "APP_ENVIRONMENT=$APP_ENVIRONMENT"; do
-  key="${pair%%=*}"; value="${pair#*=}"
-  if grep -q "^${key}=" "$APP_ROOT/shared/backend.env"; then sed -i "s|^${key}=.*|${key}=${value}|" "$APP_ROOT/shared/backend.env"; else printf '\n%s\n' "$pair" >> "$APP_ROOT/shared/backend.env"; fi
-done
+cp -a "$APP_ROOT/shared/backend.env" "$ENV_BACKUP"
 ln -sfn "$APP_ROOT/shared/backend.env" "$RELEASE_DIR/backend/.env"
 chown -R "$APP_USER:$APP_USER" "$APP_ROOT"
 
@@ -77,6 +69,18 @@ curl -fsS http://127.0.0.1:8001/healthz >/dev/null
 CANDIDATE_VERSION=$(curl -fsS http://127.0.0.1:8001/api/system/version | "$RELEASE_DIR/backend/.venv/bin/python" -c 'import json,sys;print(json.load(sys.stdin)["version"])')
 [[ "$CANDIDATE_VERSION" == "$VERSION" ]] || { echo "candidate version mismatch" >&2; exit 1; }
 kill "$CANDIDATE_PID" 2>/dev/null || true; trap - EXIT
+
+# Publish build metadata only after candidate validation. The previous service
+# continues to report its own build metadata if any earlier deployment step fails.
+if grep -q '^APP_VERSION=' "$APP_ROOT/shared/backend.env"; then
+  sed -i "s/^APP_VERSION=.*/APP_VERSION=$VERSION/" "$APP_ROOT/shared/backend.env"
+else
+  printf '\nAPP_VERSION=%s\n' "$VERSION" >> "$APP_ROOT/shared/backend.env"
+fi
+for pair in "BUILD_ID=$BUILD_ID" "BUILD_TIME=$STAMP" "GIT_COMMIT=$GIT_COMMIT" "APP_ENVIRONMENT=$APP_ENVIRONMENT"; do
+  key="${pair%%=*}"; value="${pair#*=}"
+  if grep -q "^${key}=" "$APP_ROOT/shared/backend.env"; then sed -i "s|^${key}=.*|${key}=${value}|" "$APP_ROOT/shared/backend.env"; else printf '\n%s\n' "$pair" >> "$APP_ROOT/shared/backend.env"; fi
+done
 
 ln -sfn "$RELEASE_DIR" "$CURRENT"
 cat >/etc/systemd/system/vstradingai-api.service <<SERVICE
@@ -117,9 +121,11 @@ systemctl restart vstradingai-api nginx
 sleep 3
 if ! "$CURRENT/post_deploy_smoke_test.sh"; then
   echo 'Production smoke test failed; rolling back.' >&2
+  cp -a "$ENV_BACKUP" "$APP_ROOT/shared/backend.env"
   if [[ -n "$PREVIOUS" && -d "$PREVIOUS" ]]; then ln -sfn "$PREVIOUS" "$CURRENT"; systemctl restart vstradingai-api nginx; fi
   exit 1
 fi
+rm -f "$ENV_BACKUP"
 mkdir -p "$APP_ROOT/shared/deployment/history"
 printf '{"ok":true,"version":"%s","completed_at":"%s","release":"%s"}\n' "$VERSION" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$RELEASE_DIR" > "$APP_ROOT/shared/deployment/last_smoke_test.json"
 printf '%s version=%s release=%s previous=%s result=success\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$VERSION" "$RELEASE_DIR" "${PREVIOUS:-none}" >> "$APP_ROOT/shared/deployment/history/deployments.log"

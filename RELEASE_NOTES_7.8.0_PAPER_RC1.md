@@ -15,6 +15,8 @@ write to the paper ledger. It contains no broker order placement path.
   existing risk-supervisor gates.
 - Persistent automation audit history and status/run-once endpoints.
 - Structured `BROKER_DATA_UNAVAILABLE` preview responses instead of HTTP 500.
+- Institutional-flow summary now fails closed with `BLOCKED / NO_TRADE` when
+  broker market data is unavailable, allowing safe weekend deployments.
 - Explicit health fields for market-data mode, execution mode and live-order
   state.
 - Shared SQLite/runtime path examples for release-safe persistence.
@@ -28,6 +30,8 @@ write to the paper ledger. It contains no broker order placement path.
 - Closed markets, stale/missing data, weak grades, low alignment and risk
   failures produce WAITING, NO_TRADE or BLOCKED records.
 - Candidate smoke-test processes force the autonomous worker off.
+- A failed deployment restores the previous shared build metadata before the
+  previous release is restarted.
 
 ## Activation
 
