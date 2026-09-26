@@ -137,6 +137,9 @@ class TradingReportService:
                 "zerodha_orders": len(broker.get("orders", [])), "zerodha_trades": len(broker.get("trades", [])),
                 "unmatched_zerodha_orders": 0,
                 "application_execution_orders": len(executions),
+                "profit_withdrawal_threshold": settings.paper_profit_withdrawal_threshold,
+                "withdrawal_alert": round(sum(float(x.get("net_pnl") or 0) for x in papers), 2)
+                >= settings.paper_profit_withdrawal_threshold > 0,
             },
             "recommendations": setups,
             "decisions": decisions,

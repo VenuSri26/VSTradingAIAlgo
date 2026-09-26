@@ -19,7 +19,7 @@ const items: Array<{ id: AppPage; label: string; icon: string }> = [
   { id: "live-intelligence", label: "Live Intelligence", icon: "◎" },
   { id: "operations", label: "Operations", icon: "⚙" },
   { id: "production", label: "Production", icon: "✓" },
-  { id: "settings", label: "Settings", icon: "☰" },
+  { id: "settings", label: "Setup", icon: "⚙" },
 ];
 
 interface SidebarProps {

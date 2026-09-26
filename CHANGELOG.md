@@ -1,5 +1,16 @@
 # Changelog
 
+## 7.8.2-paper-rc1 - 2026-09-26
+
+- Replaced the settings placeholder with a guided Setup console.
+- Added protected preference APIs for paper confidence, capital, profit alerts
+  and default stop-loss while permanently forcing live orders off.
+- Added HTTPS-only Zerodha login and redirect-token exchange from the UI.
+- Persisted setup changes to the shared environment with restricted permissions
+  and timestamped backups, without exposing broker secrets.
+- Applied the configured stop-loss to future paper entries and surfaced the
+  profit-withdrawal alert threshold in daily reporting.
+
 ## 7.8.1-paper-rc1 - 2026-09-26
 
 - Added trading-day-only pre-market and post-market report schedulers.

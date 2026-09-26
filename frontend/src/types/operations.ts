@@ -176,3 +176,11 @@ export interface TradingReportStatus {
     post_market:{configured_time:string;last_run_at:string|null;last_error:string|null}};
   execution_mode:"PAPER_ONLY"; live_orders_enabled:false;
 }
+export interface SetupConfiguration {
+  execution_mode:"PAPER_ONLY"; paper_enabled:boolean; live_mode_locked:true;
+  live_mode_unlock_requirement:string; live_orders_enabled:false;
+  minimum_confidence:number; capital:number; capital_min:number; capital_max:number;
+  profit_withdrawal_threshold:number; default_stop_loss_pct:number;
+  zerodha:{connected:boolean;checked_at?:string;source?:string;user_id?:string;error?:string};
+  https_required_for_token_refresh:boolean; https_configured:boolean; secrets_exposed:false;
+}

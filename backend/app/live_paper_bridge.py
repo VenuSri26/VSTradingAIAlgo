@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from app import store
+from app.config import settings
 from app.live_intelligence import analyse_live_market
 
 REQUIRED_CONFIRMATION_TEXT = "PREPARE_PAPER_SETUP"
@@ -86,7 +87,7 @@ def build_paper_setup_candidate(
 
     entry = round(_num(leg.get("ltp")), 2)
     strike = int(_num(leg.get("strike")))
-    stop_loss = round(entry * 0.80, 2)
+    stop_loss = round(entry * (1 - settings.paper_default_stop_loss_pct / 100), 2)
     target_1 = round(entry * 1.30, 2)
     target_2 = round(entry * 1.50, 2)
     risk = max(0.01, entry - stop_loss)

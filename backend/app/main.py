@@ -180,6 +180,8 @@ from app.market_data_consensus_routes import router as market_data_consensus_rou
 app.include_router(market_data_consensus_router)
 from app.trading_report_routes import router as trading_report_router  # noqa: E402
 app.include_router(trading_report_router)
+from app.setup_routes import router as setup_router  # noqa: E402
+app.include_router(setup_router)
 
 
 @app.get("/healthz")

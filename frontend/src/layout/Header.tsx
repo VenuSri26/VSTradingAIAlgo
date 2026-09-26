@@ -13,7 +13,7 @@ const titles: Record<AppPage, { title: string; subtitle: string }> = {
   resilience: { title: "Operational Resilience", subtitle: "Restart recovery, persistence and safety status" },
   scenarios: { title: "Test Scenarios", subtitle: "Deterministic release and safety validation" },
   "live-intelligence": { title: "Live Intelligence", subtitle: "Broker data quality and option-chain readiness" },
-  settings: { title: "Settings", subtitle: "Runtime and safety configuration guidance" },
+  settings: { title: "Setup", subtitle: "Zerodha connection, paper capital and safety preferences" },
   risk: { title: "Risk Supervisor", subtitle: "Capital protection and execution controls" },
   replay: { title: "Decision Replay", subtitle: "Review historical AI decisions and outcomes" },
   agents: { title: "AI Agents", subtitle: "Multi-agent evidence, votes and explanations" },

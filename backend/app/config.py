@@ -50,6 +50,8 @@ class Settings:
     max_risk_per_trade_pct: float = float(os.getenv("MAX_RISK_PER_TRADE_PCT", "2"))
     paper_slippage_rupees: float = float(os.getenv("PAPER_SLIPPAGE_RUPEES", "0.5"))
     paper_cost_rate: float = float(os.getenv("PAPER_COST_RATE", "0.0015"))
+    paper_profit_withdrawal_threshold: float = float(os.getenv("PAPER_PROFIT_WITHDRAWAL_THRESHOLD", "100000"))
+    paper_default_stop_loss_pct: float = float(os.getenv("PAPER_DEFAULT_STOP_LOSS_PCT", "20"))
     min_agent_coverage: float = float(os.getenv("MIN_AGENT_COVERAGE", "0.70"))
     max_agent_disagreement: float = float(os.getenv("MAX_AGENT_DISAGREEMENT", "0.45"))
 
@@ -329,6 +331,10 @@ def validate(settings_obj: Settings = settings) -> list[str]:
         problems.append("PAPER_SLIPPAGE_RUPEES must be >= 0")
     if settings_obj.paper_cost_rate < 0:
         problems.append("PAPER_COST_RATE must be >= 0")
+    if settings_obj.paper_profit_withdrawal_threshold < 0:
+        problems.append("PAPER_PROFIT_WITHDRAWAL_THRESHOLD must be >= 0")
+    if not 1 <= settings_obj.paper_default_stop_loss_pct <= 50:
+        problems.append("PAPER_DEFAULT_STOP_LOSS_PCT must be between 1 and 50")
     if not 0.5 <= settings_obj.min_agent_coverage <= 1.0:
         problems.append("MIN_AGENT_COVERAGE must be between 0.5 and 1.0")
     if not 0.0 <= settings_obj.max_agent_disagreement <= 1.0:

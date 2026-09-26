@@ -1,5 +1,5 @@
 import type { LiveDecisionResponse } from "../types/decision";
-import type { AgentRegistry, DecisionReplay, DeploymentSnapshot, LogEntry, OperationalAlert, OperationsSystem, PaperAnalytics, PaperPortfolioSummary, PaperTrade, ReplayListItem, RiskStatus, StrategyLabResult, SystemMetrics, TradeSetup, TradeTimeline, VersionInfo, ZerodhaHealth, ReleaseCertificate, DecisionExplanation, InstitutionalFlowSummary, InstitutionalFlowTrend, InstitutionalFlowPoint, DecisionIntelligence, AICommandCenter, ProductionCandidateStatus, ResilienceStatus, OpenPaperManagement, PaperAutomationStatus, PaperMonitorStatus, PaperDailySummary, PaperLoopReadiness, TradingReportStatus } from "../types/operations";
+import type { AgentRegistry, DecisionReplay, DeploymentSnapshot, LogEntry, OperationalAlert, OperationsSystem, PaperAnalytics, PaperPortfolioSummary, PaperTrade, ReplayListItem, RiskStatus, StrategyLabResult, SystemMetrics, TradeSetup, TradeTimeline, VersionInfo, ZerodhaHealth, ReleaseCertificate, DecisionExplanation, InstitutionalFlowSummary, InstitutionalFlowTrend, InstitutionalFlowPoint, DecisionIntelligence, AICommandCenter, ProductionCandidateStatus, ResilienceStatus, OpenPaperManagement, PaperAutomationStatus, PaperMonitorStatus, PaperDailySummary, PaperLoopReadiness, TradingReportStatus, SetupConfiguration } from "../types/operations";
 
 const BASE_URL =
   import.meta.env.VITE_API_BASE_URL?.trim() || window.location.origin;
@@ -40,6 +40,11 @@ export const api = {
   getPaperDailySummary: () => requestJSON<PaperDailySummary>("/api/paper/daily-summary"),
   getPaperLoopReadiness: () => requestJSON<PaperLoopReadiness>("/api/paper/readiness"),
   getTradingReportStatus: () => requestJSON<TradingReportStatus>("/api/trading-reports/status"),
+  getSetupStatus: () => requestJSON<SetupConfiguration>("/api/setup/status"),
+  saveSetupPreferences: (payload: {minimum_confidence:number;capital:number;profit_withdrawal_threshold:number;default_stop_loss_pct:number}, token: string) =>
+    requestJSON<SetupConfiguration & {saved:boolean;applied_immediately:boolean}>("/api/setup/preferences", {method:"PUT",headers:adminHeaders(token),body:JSON.stringify(payload)}),
+  getZerodhaLoginUrl: (token: string) => requestJSON<{login_url:string;expires:string;live_orders_enabled:false}>("/api/setup/zerodha/login-url", {headers:adminHeaders(token)}),
+  refreshZerodhaFromRedirect: (redirect_url: string, token: string) => requestJSON<{connected:boolean;user_id:string;saved:boolean;live_orders_enabled:false}>("/api/setup/zerodha/refresh", {method:"POST",headers:adminHeaders(token),body:JSON.stringify({redirect_url})}, 30000),
   executePaper: (setup_id: number, entry_price: number, quantity: number | undefined, token: string) =>
     requestJSON<Record<string, unknown>>("/api/paper/execute", { method: "POST", headers: adminHeaders(token), body: JSON.stringify({setup_id, entry_price, ...(quantity ? {quantity} : {})}) }),
   monitorPaper: (current_price: number, force_eod: boolean, token: string) =>

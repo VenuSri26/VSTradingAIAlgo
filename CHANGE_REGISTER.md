@@ -1,4 +1,24 @@
 
+## CR-2026-09-26-0782 — v7.8.2 Safe Setup Console
+
+| Field | Record |
+|---|---|
+| Date | 2026-09-26 |
+| Version | 7.8.2-paper-rc1 |
+| Category | Setup UI, configuration safety, Zerodha authentication |
+| Problem / objective | Let the operator configure paper trading and refresh Zerodha authentication from one guided screen without exposing live execution controls |
+| Files and modules changed | Setup service/routes/tests, configuration, paper bridge/reporting, Settings frontend, navigation, smoke test and release documentation |
+| Implementation summary | Added allowlisted persistent preferences, protected APIs, HTTPS-only Kite redirect exchange, sanitized status and a responsive Setup console |
+| Trading logic impact | Configured default stop-loss applies only to future paper entries; confidence and paper capital retain their existing gates |
+| Zerodha compatibility impact | Uses the official login URL, session exchange and profile verification; no order placement, modification or cancellation is added |
+| API / database compatibility impact | Additive `/api/setup/*` endpoints; no schema migration and no existing route removal |
+| Configuration changes | Added `PAPER_PROFIT_WITHDRAWAL_THRESHOLD` and `PAPER_DEFAULT_STOP_LOSS_PCT`; preference writes force `LIVE_ORDERS_ENABLED=false` |
+| Security impact | Secret-free status responses, HTTPS-only redirect submission, admin protection, `0600` environment permissions and backups |
+| Tests executed | Setup-focused backend tests, full backend suite, production frontend build, shell syntax, route probe and Git whitespace check |
+| Rollback procedure | Repoint `/opt/vstradingai/current` to the previous release and restart the API; restore a timestamped config backup only if preferences must also be reverted |
+| Known limitations | Public-IP HTTP cannot perform browser token exchange; automatic capital withdrawal is intentionally not implemented |
+| Pending follow-up | Configure a domain/TLS certificate, then verify the UI token flow and a complete live-market paper session |
+
 ## CR-2026-09-26-0781 — v7.8.1 Reporting and Reconciliation
 
 | Field | Record |
