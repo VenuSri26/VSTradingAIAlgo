@@ -72,7 +72,8 @@ def _close_if_required(trade: dict[str, Any], current_price: float, force_eod: b
     if result["action"] == "CLOSED":
         closed = result
         if closed.get("net_pnl") is not None:
-            store.record_trade_result(closed["net_pnl"], "B")
+            setup = store.get_trade_setup(trade["setup_id"])
+            store.record_trade_result(closed["net_pnl"], (setup or {}).get("grade") or "B")
         event = {"event": "PAPER_TRADE_CLOSED", "trade_id": trade["id"],
                  "status": closed.get("status"), "reason": closed.get("reason"),
                  "close_price": current_price, "net_pnl": closed.get("net_pnl")}

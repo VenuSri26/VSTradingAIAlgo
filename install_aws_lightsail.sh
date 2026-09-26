@@ -6,7 +6,7 @@ SOURCE_DIR="$(cd "$(dirname "$0")" && pwd)"
 VERSION="$(tr -d '[:space:]' < "$SOURCE_DIR/VERSION")"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 BUILD_ID="${BUILD_ID:-$VERSION-$STAMP}"
-GIT_COMMIT="${GIT_COMMIT:-unknown}"
+GIT_COMMIT="${GIT_COMMIT:-$(git -C "$SOURCE_DIR" rev-parse --short HEAD 2>/dev/null || printf unknown)}"
 APP_ENVIRONMENT="${APP_ENVIRONMENT:-production}"
 RELEASE_DIR="$APP_ROOT/releases/${VERSION}-${STAMP}"
 CURRENT="$APP_ROOT/current"
@@ -67,7 +67,7 @@ if [[ -n "$STALE_PID" ]]; then
 fi
 
 # Start candidate on a temporary private port before switching production.
-sudo -u "$APP_USER" bash -lc "cd '$RELEASE_DIR/backend' && set -a && source .env && set +a && export APP_VERSION='$VERSION' && PYTHONPATH=. .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8001 > /tmp/vstradingai-candidate.log 2>&1 & echo \$!" > /tmp/vstradingai-candidate.pid
+sudo -u "$APP_USER" bash -lc "cd '$RELEASE_DIR/backend' && set -a && source .env && set +a && export APP_VERSION='$VERSION' PAPER_AUTO_TRADER_ENABLED=false && PYTHONPATH=. .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8001 > /tmp/vstradingai-candidate.log 2>&1 & echo \$!" > /tmp/vstradingai-candidate.pid
 CANDIDATE_PID=$(cat /tmp/vstradingai-candidate.pid); trap 'kill "$CANDIDATE_PID" 2>/dev/null || true' EXIT
 for _ in $(seq 1 30); do curl -fsS http://127.0.0.1:8001/healthz >/dev/null && break; sleep 1; done
 curl -fsS http://127.0.0.1:8001/healthz >/dev/null

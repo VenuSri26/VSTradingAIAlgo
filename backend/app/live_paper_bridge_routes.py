@@ -30,10 +30,27 @@ class PrepareRequest(BaseModel):
 
 
 def _preview(atm_range: int, max_age_sec: int):
-    snapshot = get_data_source().get_option_chain(atm_range=atm_range)
-    return snapshot, build_paper_setup_candidate(
-        snapshot, trend(limit=60), max_age_sec=max_age_sec
-    )
+    try:
+        snapshot = get_data_source().get_option_chain(atm_range=atm_range)
+        return snapshot, build_paper_setup_candidate(
+            snapshot, trend(limit=60), max_age_sec=max_age_sec
+        )
+    except Exception as exc:
+        # Broker expiry, transport failures and malformed upstream data are an
+        # expected operational state. Fail closed with a useful response rather
+        # than leaking a traceback as HTTP 500.
+        return None, {
+            "status": "BLOCKED",
+            "action": "NO_TRADE",
+            "execution_mode": "PAPER_PREVIEW_ONLY",
+            "live_orders_enabled": False,
+            "intelligence": None,
+            "trend": "NO_DATA",
+            "warnings": [],
+            "blockers": [f"Broker data unavailable ({type(exc).__name__})"],
+            "error_code": "BROKER_DATA_UNAVAILABLE",
+            "candidate": None,
+        }
 
 
 @router.get("/api/live-paper/preview")
@@ -57,3 +74,15 @@ def prepare_live_paper_setup(body: PrepareRequest):
         return prepare_paper_setup_from_preview(result)
     except PaperSetupNotReady as e:
         raise HTTPException(status_code=409, detail=e.result)
+
+
+@router.get("/api/paper/automation/status")
+def paper_automation_status():
+    from app.paper_auto_trader import status_snapshot
+    return status_snapshot()
+
+
+@router.post("/api/paper/automation/run-once", dependencies=[Depends(require_admin_token)])
+def paper_automation_run_once():
+    from app.paper_auto_trader import run_once
+    return run_once(get_data_source())

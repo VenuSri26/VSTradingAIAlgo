@@ -329,6 +329,55 @@ def get_open_paper_trade() -> dict | None:
         return dict(row) if row else None
 
 
+def latest_closed_paper_trade() -> dict | None:
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM paper_trades WHERE status != 'OPEN' ORDER BY closed_at DESC, id DESC LIMIT 1"
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def record_paper_automation_run(action: str, reason: str | None = None,
+                                setup_id: int | None = None, trade_id: int | None = None,
+                                details: dict | None = None, cycle_key: str | None = None) -> int:
+    checked_at = datetime.now(timezone.utc).isoformat()
+    with _conn() as conn:
+        cur = conn.execute(
+            """INSERT INTO paper_automation_runs
+               (checked_at, trading_day, cycle_key, action, reason, setup_id, trade_id, details_json)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (checked_at, _today(), cycle_key, action, reason, setup_id, trade_id,
+             json.dumps(details or {}, default=str, separators=(",", ":"))),
+        )
+        return cur.lastrowid
+
+
+def list_paper_automation_runs(limit: int = 50) -> list[dict]:
+    limit = max(1, min(limit, 200))
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM paper_automation_runs ORDER BY id DESC LIMIT ?", (limit,)
+        ).fetchall()
+    result = []
+    for row in rows:
+        item = dict(row)
+        try:
+            item["details"] = json.loads(item.pop("details_json"))
+        except (TypeError, json.JSONDecodeError):
+            item["details"] = {}
+            item.pop("details_json", None)
+        result.append(item)
+    return result
+
+
+def has_paper_automation_cycle(cycle_key: str) -> bool:
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT 1 FROM paper_automation_runs WHERE cycle_key = ? LIMIT 1", (cycle_key,)
+        ).fetchone()
+        return row is not None
+
+
 def list_paper_trades(trading_day: str | None = None, status: str | None = None, limit: int = 50) -> list[dict]:
     clauses, values = [], []
     if trading_day:

@@ -8,6 +8,28 @@
 - Added monitor status, event history and protected run-once APIs.
 - Confirmed that no live Zerodha order method is called by the monitor.
 
+## CR-2026-09-26-078 — v7.8 Autonomous Paper Trading Loop
+
+| Field | Record |
+|---|---|
+| Date | 2026-09-26 |
+| Version | 7.8.0-paper-rc1 |
+| Category | Paper automation, persistence, operational safety |
+| Problem / objective | Produce qualified paper calls and journal entries automatically instead of requiring manual preview, approval and execution requests |
+| Files and modules changed | `paper_auto_trader.py`, `live_paper_bridge_routes.py`, `store.py`, migration 008, application lifecycle, configuration, deployment installer, tests and release documentation |
+| Implementation summary | Added an opt-in NSE-session worker that records live intelligence, evaluates each three-minute market-data bucket once, applies A/A+ and risk gates, and opens only simulated paper positions |
+| Trading logic impact | Automates the existing paper path; does not relax the intelligence or risk gates |
+| Zerodha compatibility impact | Read-only option-chain use; no broker order method is added or called |
+| API / database compatibility impact | Additive endpoints and `paper_automation_runs` table; existing APIs remain compatible |
+| Configuration changes | New `PAPER_AUTO_TRADER_*` variables; shared production paths documented; `LIVE_ORDERS_ENABLED=false` remains mandatory |
+| Tests executed | Python compile, focused offline suite, complete offline-compatible suite, Git whitespace check, shell syntax checks |
+| Test results | Focused 20/20 passed; complete offline-compatible run 218 passed with 7 environment/shim limitations (real pytest/FastAPI/httpx unavailable locally) |
+| AWS deployment notes | Deploy disabled, run real 246+ suite, verify status, then explicitly enable the paper worker; candidate port 8001 forces the worker off |
+| Rollback procedure | Point `/opt/vstradingai/current` to the previous release and restart `vstradingai-api.service`; migration 008 is additive |
+| Known limitations | Live-session validation and sufficient OI/PCR samples are still required; ₹10,000 paper capital may legitimately block a full Nifty lot under the configured risk cap |
+| Pending follow-up | Monday live-session certification, mobile dashboard presentation and notification delivery |
+| Approver / verifier | Pending AWS verification |
+
 # VSTradingAI Change & Improvement Register
 
 This is the verification record for every production-facing change. New entries must be appended; previous entries must not be rewritten except to correct a factual error, which must itself be noted.

@@ -59,6 +59,16 @@ class Settings:
     paper_eod_exit_time: str = os.getenv("PAPER_EOD_EXIT_TIME", "15:20")
     paper_notification_path: str = os.getenv("PAPER_NOTIFICATION_PATH", "./data/paper_notifications.jsonl")
 
+    # v7.8 autonomous PAPER-only entry loop. This feature can create simulated
+    # trades, but it never calls a broker order API. It is opt-in so a release
+    # can be deployed and inspected before automation is armed.
+    paper_auto_trader_enabled: bool = os.getenv("PAPER_AUTO_TRADER_ENABLED", "false").lower() in ("1", "true", "yes", "on")
+    paper_auto_trader_interval_sec: float = float(os.getenv("PAPER_AUTO_TRADER_INTERVAL_SEC", "15"))
+    paper_auto_trader_min_score: int = int(os.getenv("PAPER_AUTO_TRADER_MIN_SCORE", "85"))
+    paper_auto_trader_grades: str = os.getenv("PAPER_AUTO_TRADER_GRADES", "A,A+")
+    paper_auto_trader_atm_range: int = int(os.getenv("PAPER_AUTO_TRADER_ATM_RANGE", "8"))
+    paper_auto_trader_max_age_sec: int = int(os.getenv("PAPER_AUTO_TRADER_MAX_AGE_SEC", "30"))
+
     market_data_supervisor_enabled: bool = os.getenv("MARKET_DATA_SUPERVISOR_ENABLED", "true").lower() in ("1", "true", "yes", "on")
     market_data_poll_interval_sec: float = float(os.getenv("MARKET_DATA_POLL_INTERVAL_SEC", "3"))
     market_data_state_path: str = os.getenv("MARKET_DATA_STATE_PATH", "./data/market_data_state.json")
@@ -292,6 +302,19 @@ def validate(settings_obj: Settings = settings) -> list[str]:
         problems.append("MAX_AGENT_DISAGREEMENT must be between 0.0 and 1.0")
     if settings_obj.paper_monitor_interval_sec < 1:
         problems.append("PAPER_MONITOR_INTERVAL_SEC must be >= 1")
+    if settings_obj.paper_auto_trader_interval_sec < 3:
+        problems.append("PAPER_AUTO_TRADER_INTERVAL_SEC must be >= 3")
+    if not 0 <= settings_obj.paper_auto_trader_min_score <= 100:
+        problems.append("PAPER_AUTO_TRADER_MIN_SCORE must be between 0 and 100")
+    if not 2 <= settings_obj.paper_auto_trader_atm_range <= 20:
+        problems.append("PAPER_AUTO_TRADER_ATM_RANGE must be between 2 and 20")
+    if not 1 <= settings_obj.paper_auto_trader_max_age_sec <= 300:
+        problems.append("PAPER_AUTO_TRADER_MAX_AGE_SEC must be between 1 and 300")
+    grades = {item.strip() for item in settings_obj.paper_auto_trader_grades.split(",") if item.strip()}
+    if not grades or not grades.issubset({"A", "A+"}):
+        problems.append("PAPER_AUTO_TRADER_GRADES must contain only A and/or A+")
+    if settings_obj.paper_auto_trader_enabled and settings_obj.live_orders_enabled:
+        problems.append("PAPER_AUTO_TRADER_ENABLED requires LIVE_ORDERS_ENABLED=false")
     try:
         hh, mm = [int(x) for x in settings_obj.paper_eod_exit_time.split(":", 1)]
         if not (0 <= hh <= 23 and 0 <= mm <= 59):

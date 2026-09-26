@@ -39,10 +39,14 @@ async def lifespan(app: FastAPI):
     daily_digest_scheduler_task = None
     live_session_recorder_task = None
     certification_eod_task = None
+    paper_auto_trader_task = None
     from app.routes import get_data_source
     if settings.paper_auto_monitor_enabled:
         from app.paper_monitor import run_monitor_loop
         monitor_task = asyncio.create_task(run_monitor_loop(get_data_source))
+    if settings.paper_auto_trader_enabled:
+        from app.paper_auto_trader import run_loop as run_paper_auto_trader_loop
+        paper_auto_trader_task = asyncio.create_task(run_paper_auto_trader_loop(get_data_source))
     if settings.market_data_supervisor_enabled:
         from app.market_data_service import get_supervisor
         supervisor = get_supervisor(
@@ -80,7 +84,7 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
-        for task in (monitor_task, market_data_task, kite_runtime_task, runtime_maintenance_task, notification_scheduler_task, daily_digest_scheduler_task, live_session_recorder_task, certification_eod_task):
+        for task in (monitor_task, paper_auto_trader_task, market_data_task, kite_runtime_task, runtime_maintenance_task, notification_scheduler_task, daily_digest_scheduler_task, live_session_recorder_task, certification_eod_task):
             if task is not None:
                 task.cancel()
                 try:
@@ -172,4 +176,12 @@ app.include_router(market_data_consensus_router)
 
 @app.get("/healthz")
 def healthz():
-    return {"status": "ok", "trading_mode": settings.trading_mode, **version_info()}
+    return {
+        "status": "ok",
+        "market_data_mode": settings.trading_mode.upper(),
+        "execution_mode": "PAPER_ONLY" if not settings.live_orders_enabled else "LIVE_BROKER",
+        "live_orders_enabled": settings.live_orders_enabled,
+        # Kept for API compatibility; consumers should use the explicit fields above.
+        "trading_mode": settings.trading_mode,
+        **version_info(),
+    }

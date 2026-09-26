@@ -1,5 +1,15 @@
 # Changelog
 
+## 7.8.0-paper-rc1 - 2026-09-26
+
+- Added an opt-in autonomous paper-only decision and entry worker.
+- Persisted one decision per finalized three-minute candle across restarts.
+- Reused A/A+, alignment, session, cooldown and risk-supervisor gates.
+- Made the worker collect OI/PCR history without requiring dashboard traffic.
+- Added structured broker-data failure responses and automation status APIs.
+- Clarified live market-data versus paper execution mode in health output.
+- Moved runtime databases and JSONL files out of Git-tracked release content.
+
 ## 2.6.0-rc.2
 - Removed hardcoded frontend version badge; UI now reads `/api/system/version`.
 - Added build ID, build time, commit, environment and active release metadata.
