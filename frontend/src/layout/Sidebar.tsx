@@ -2,6 +2,7 @@ import type { AppPage } from "./AppLayout";
 
 const items: Array<{ id: AppPage; label: string; icon: string }> = [
   { id: "overview", label: "Overview", icon: "◫" },
+  { id: "auto-paper", label: "Auto Paper", icon: "▶" },
   { id: "trading", label: "Trading", icon: "↗" },
   { id: "portfolio", label: "Portfolio", icon: "₹" },
   { id: "risk", label: "Risk", icon: "!" },

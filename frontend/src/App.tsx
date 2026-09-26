@@ -18,12 +18,15 @@ import { ProductionCandidatePage } from "./pages/ProductionCandidatePage";
 import { ResiliencePage } from "./pages/ResiliencePage";
 import { TestScenariosPage } from "./pages/TestScenariosPage";
 import { LiveIntelligencePage } from "./pages/LiveIntelligencePage";
+import { PaperAutomationPage } from "./pages/PaperAutomationPage";
 
 export default function App() {
   const [page, setPage] = useState<AppPage>("overview");
 
   const content = useMemo(() => {
     switch (page) {
+      case "auto-paper":
+        return <PaperAutomationPage />;
       case "trading":
         return <TradingWorkspace />;
       case "portfolio":

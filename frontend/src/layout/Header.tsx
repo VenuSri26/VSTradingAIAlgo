@@ -5,6 +5,7 @@ import type { VersionInfo } from "../types/operations";
 
 const titles: Record<AppPage, { title: string; subtitle: string }> = {
   overview: { title: "Market Overview", subtitle: "Multi-agent Nifty50 decision support" },
+  "auto-paper": { title: "Autonomous Paper", subtitle: "V7.8 loop status, decisions and paper journal" },
   trading: { title: "Trading Workspace", subtitle: "Trade setups, execution and monitoring" },
   portfolio: { title: "Paper Portfolio", subtitle: "Open positions, journal and performance" },
   analytics: { title: "Analytics", subtitle: "Session metrics and decision quality" },
@@ -34,7 +35,7 @@ export function Header({ activePage }: { activePage: AppPage }) {
     <header className="top-header">
       <div><h1>{current.title}</h1><p>{current.subtitle}</p></div>
       <div className="header-badges">
-        <span className="header-badge safe">HUMAN APPROVAL</span>
+        <span className="header-badge safe">AUTONOMOUS PAPER</span>
         <span className="header-badge">{version ? `v${version.version}` : "version loading"}</span>
         {version?.environment ? <span className="header-badge">{version.environment.toUpperCase()}</span> : null}
       </div>

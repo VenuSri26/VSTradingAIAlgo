@@ -123,3 +123,29 @@ export interface PaperManagementState {
   trail_distance_pct:number; last_action:string; updated_at:string;
 }
 export interface OpenPaperManagement { trade:PaperTrade|null; management:PaperManagementState|null; execution_mode?:string; }
+
+export interface PaperAutomationRun {
+  id:number; checked_at:string; trading_day:string; cycle_key:string|null; action:string;
+  reason:string|null; setup_id:number|null; trade_id:number|null; details?:Record<string,unknown>;
+}
+export interface PaperAutomationSummary {
+  trading_day:string; recorded_cycles:number; paper_trades_opened:number; blocked:number;
+  no_trade:number; actions:Record<string,number>;
+}
+export interface PaperAutomationStatus {
+  running:boolean; iterations:number; paper_trades_opened:number; blocked:number;
+  last_checked_at:string|null; last_action:string; last_reason:string|null;
+  last_setup_id:number|null; last_trade_id:number|null; enabled:boolean; interval_sec:number;
+  minimum_score:number; allowed_grades:string; execution_mode:"PAPER_ONLY";
+  live_orders_enabled:false; persistent_today:PaperAutomationSummary; recent_runs:PaperAutomationRun[];
+}
+export interface PaperMonitorStatus {
+  running:boolean; iterations:number; successful_quotes:number; quote_failures:number;
+  last_checked_at:string|null; last_price:number|null; last_action:string;
+  last_error:string|null; active_trade_id:number|null; enabled:boolean; interval_sec:number;
+  max_quote_age_sec:number; eod_exit_time:string; execution_mode:"PAPER_ONLY";
+}
+export interface PaperDailySummary {
+  trading_day:string|null; portfolio:PaperPortfolioSummary; open_positions:Array<Record<string,unknown>>;
+  journal_entries:number; execution_mode:"PAPER_ONLY"; broker_orders_sent:false;
+}
