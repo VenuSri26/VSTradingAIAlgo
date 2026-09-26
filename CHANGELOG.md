@@ -1,5 +1,14 @@
 # Changelog
 
+## 7.8.3-paper-rc1 - 2026-09-26
+
+- Made the desktop sidebar independently scrollable so every page remains
+  reachable at normal browser zoom.
+- Added browser-history routing so `/settings` and other page URLs open the
+  requested screen directly and survive refresh/back/forward navigation.
+- Made AWS deployment enforce Nginx-safe directory and frontend file
+  permissions, preventing the observed 500/internal redirect loop.
+
 ## 7.8.2-paper-rc1 - 2026-09-26
 
 - Replaced the settings placeholder with a guided Setup console.

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AppLayout, type AppPage } from "./layout/AppLayout";
 import Dashboard from "./Dashboard";
 import { TradingWorkspace } from "./pages/TradingWorkspace";
@@ -21,7 +21,29 @@ import { LiveIntelligencePage } from "./pages/LiveIntelligencePage";
 import { PaperAutomationPage } from "./pages/PaperAutomationPage";
 
 export default function App() {
-  const [page, setPage] = useState<AppPage>("overview");
+  const validPages = useMemo(() => new Set<AppPage>([
+    "overview", "auto-paper", "trading", "portfolio", "risk", "analytics",
+    "replay", "agents", "command", "flow", "strategy", "operations",
+    "production", "learning", "certification", "resilience", "scenarios",
+    "live-intelligence", "settings",
+  ]), []);
+  const pageFromPath = () => {
+    const candidate = window.location.pathname.replace(/^\/+|\/+$/g, "") || "overview";
+    return validPages.has(candidate as AppPage) ? candidate as AppPage : "overview";
+  };
+  const [page, setPage] = useState<AppPage>(pageFromPath);
+
+  useEffect(() => {
+    const onPopState = () => setPage(pageFromPath());
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, [validPages]);
+
+  function navigate(nextPage: AppPage) {
+    setPage(nextPage);
+    const nextPath = nextPage === "overview" ? "/" : `/${nextPage}`;
+    if (window.location.pathname !== nextPath) window.history.pushState({}, "", nextPath);
+  }
 
   const content = useMemo(() => {
     switch (page) {
@@ -67,7 +89,7 @@ export default function App() {
   }, [page]);
 
   return (
-    <AppLayout activePage={page} onNavigate={setPage}>
+    <AppLayout activePage={page} onNavigate={navigate}>
       {content}
     </AppLayout>
   );

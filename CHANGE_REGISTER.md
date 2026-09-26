@@ -1,4 +1,22 @@
 
+## CR-2026-09-26-0783 — v7.8.3 Navigation and Deployment Repair
+
+| Field | Record |
+|---|---|
+| Date | 2026-09-26 |
+| Version | 7.8.3-paper-rc1 |
+| Category | Frontend navigation and AWS deployment reliability |
+| Problem / objective | Setup was hidden below the fixed-height sidebar, direct `/settings` navigation did not select Setup, and Nginx received permission denied after deployment |
+| Files and modules changed | Frontend application routing/CSS, AWS installer, version and release records |
+| Implementation summary | Added scrollable desktop navigation, URL/history synchronization, and explicit Nginx-readable release permissions after frontend build |
+| Trading logic impact | None |
+| Zerodha compatibility impact | None; credentials and broker behavior are unchanged |
+| API / database compatibility impact | None |
+| Security impact | Grants only directory traversal and static-file read permissions required by Nginx; backend environment and runtime data permissions remain unchanged |
+| Tests executed | Production frontend build, backend suite, shell syntax and Git whitespace checks |
+| Rollback procedure | Repoint current to V7.8.2 and restart services; the permission changes are limited to immutable static release files |
+| Pending follow-up | Add HTTPS before browser submission of admin or Zerodha credentials |
+
 ## CR-2026-09-26-0782 — v7.8.2 Safe Setup Console
 
 | Field | Record |

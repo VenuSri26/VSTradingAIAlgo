@@ -42,6 +42,13 @@ sudo -u "$APP_USER" "$RELEASE_DIR/backend/.venv/bin/pip" install --upgrade pip
 sudo -u "$APP_USER" "$RELEASE_DIR/backend/.venv/bin/pip" install -r "$RELEASE_DIR/backend/requirements.lock"
 sudo -u "$APP_USER" bash -lc "cd '$RELEASE_DIR/frontend' && npm install && npm run build"
 
+# Nginx must be able to traverse the immutable release and read the generated
+# SPA. Explicit permissions avoid a 500/internal redirect loop when an archive
+# or deployment umask makes a parent directory private.
+chmod 755 "$APP_ROOT" "$APP_ROOT/releases" "$RELEASE_DIR" "$RELEASE_DIR/frontend"
+find "$RELEASE_DIR/frontend/dist" -type d -exec chmod 755 {} +
+find "$RELEASE_DIR/frontend/dist" -type f -exec chmod 644 {} +
+
 cd "$RELEASE_DIR/backend"
 sudo -u "$APP_USER" env PYTHONPATH=. .venv/bin/python -m compileall -q app
 sudo -u "$APP_USER" env PYTHONPATH=. .venv/bin/pytest -q
