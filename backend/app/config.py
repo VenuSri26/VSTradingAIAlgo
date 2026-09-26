@@ -202,6 +202,19 @@ def validate(settings_obj: Settings = settings) -> list[str]:
 
     if settings_obj.max_trades_per_day < 1:
         problems.append("MAX_TRADES_PER_DAY must be >= 1")
+    if settings_obj.paper_auto_trader_enabled and settings_obj.live_orders_enabled:
+        problems.append("PAPER_AUTO_TRADER_ENABLED requires LIVE_ORDERS_ENABLED=false")
+    if settings_obj.paper_auto_trader_interval_sec < 3:
+        problems.append("PAPER_AUTO_TRADER_INTERVAL_SEC must be >= 3")
+    if not 1 <= settings_obj.paper_auto_trader_min_score <= 100:
+        problems.append("PAPER_AUTO_TRADER_MIN_SCORE must be between 1 and 100")
+    allowed_paper_grades = {
+        grade.strip() for grade in settings_obj.paper_auto_trader_grades.split(",") if grade.strip()
+    }
+    if not allowed_paper_grades or not allowed_paper_grades.issubset({"A", "A+"}):
+        problems.append("PAPER_AUTO_TRADER_GRADES may contain only A and A+")
+    if settings_obj.paper_monitor_interval_sec < 1:
+        problems.append("PAPER_MONITOR_INTERVAL_SEC must be >= 1")
     if settings_obj.execution_preview_ttl_sec < 30:
         problems.append("EXECUTION_PREVIEW_TTL_SEC must be >= 30")
     for name, value in (

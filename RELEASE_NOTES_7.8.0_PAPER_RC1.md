@@ -22,6 +22,13 @@ write to the paper ledger. It contains no broker order placement path.
 - Shared SQLite/runtime path examples for release-safe persistence.
 - Release installer excludes runtime directories before creating shared-state
   symlinks, preventing nested data/deployment links.
+- Holiday-safe readiness certificate at `/api/paper/readiness`, separating
+  completed offline controls from evidence that genuinely requires a live NSE
+  session.
+- Startup validation rejects autonomous-paper mode if live broker orders are
+  enabled, invalid grades are configured, or worker intervals are unsafe.
+- Dedicated mobile-friendly Auto Paper dashboard for loop, monitor, readiness,
+  recent decisions and journal visibility.
 
 ## Safety invariants
 

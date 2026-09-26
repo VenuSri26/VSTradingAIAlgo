@@ -149,3 +149,12 @@ export interface PaperDailySummary {
   trading_day:string|null; portfolio:PaperPortfolioSummary; open_positions:Array<Record<string,unknown>>;
   journal_entries:number; execution_mode:"PAPER_ONLY"; broker_orders_sent:false;
 }
+export interface PaperLoopReadiness {
+  generated_at:string; status:"OFFLINE_COMPLETE_LIVE_PENDING"|"OFFLINE_BLOCKED";
+  offline_complete:boolean; live_market_pending:boolean;
+  checks:Array<{code:string;label:string;passed:boolean;detail:string}>;
+  failed_checks:Array<{code:string;label:string;passed:boolean;detail:string}>;
+  pending_live_evidence:string[];
+  runtime:{automation_running:boolean;monitor_running:boolean;last_action:string|null;last_reason:string|null};
+  execution_mode:"PAPER_ONLY"; live_orders_enabled:boolean; recommended_action:string;
+}

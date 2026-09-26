@@ -82,6 +82,12 @@ def paper_automation_status():
     return status_snapshot()
 
 
+@router.get("/api/paper/readiness")
+def paper_readiness():
+    from app.paper_loop_readiness import paper_loop_readiness
+    return paper_loop_readiness()
+
+
 @router.post("/api/paper/automation/run-once", dependencies=[Depends(require_admin_token)])
 def paper_automation_run_once():
     from app.paper_auto_trader import run_once

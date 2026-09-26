@@ -4,6 +4,7 @@ import { api } from "../services/api";
 import type {
   PaperAutomationStatus,
   PaperDailySummary,
+  PaperLoopReadiness,
   PaperMonitorStatus,
   PaperTrade,
   ZerodhaHealth,
@@ -25,17 +26,18 @@ export function PaperAutomationPage() {
   const [health, setHealth] = useState<ZerodhaHealth | null>(null);
   const [summary, setSummary] = useState<PaperDailySummary | null>(null);
   const [trades, setTrades] = useState<PaperTrade[]>([]);
+  const [readiness, setReadiness] = useState<PaperLoopReadiness | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const [auto, mon, broker, day, journal] = await Promise.all([
+      const [auto, mon, broker, day, journal, certificate] = await Promise.all([
         api.getPaperAutomationStatus(), api.getPaperMonitorStatus(), api.getZerodhaHealth(),
-        api.getPaperDailySummary(), api.getPaperTrades(),
+        api.getPaperDailySummary(), api.getPaperTrades(), api.getPaperLoopReadiness(),
       ]);
       setAutomation(auto); setMonitor(mon); setHealth(broker); setSummary(day);
-      setTrades(journal.trades); setUpdatedAt(new Date().toISOString()); setError(null);
+      setTrades(journal.trades); setReadiness(certificate); setUpdatedAt(new Date().toISOString()); setError(null);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     }
@@ -76,6 +78,24 @@ export function PaperAutomationPage() {
       <StatTile label="No-trade decisions" value={persistent?.no_trade ?? 0} />
       <StatTile label="Blocked decisions" value={persistent?.blocked ?? 0} />
     </div>
+
+    <PageCard title="Holiday Completion Certificate" accent="#a78bfa">
+      <div className="certificate-heading">
+        <div><strong className={readiness?.offline_complete ? "positive" : "negative"}>{readiness?.status ?? "LOADING"}</strong>
+          <p className="muted-text">{readiness?.recommended_action ?? "Checking offline readiness…"}</p></div>
+        <span className={`safety-pill ${readiness?.offline_complete ? "certificate-pass" : ""}`}>
+          {readiness?.offline_complete ? "OFFLINE COMPLETE" : "ACTION REQUIRED"}
+        </span>
+      </div>
+      <div className="readiness-grid">
+        {readiness?.checks.map(check => <div className="readiness-check" key={check.code}>
+          <span className={check.passed ? "positive" : "negative"}>{check.passed ? "✓" : "✕"}</span>
+          <div><strong>{check.label}</strong><small>{check.detail}</small></div>
+        </div>)}
+      </div>
+      <h3 className="subheading">Only live evidence remaining</h3>
+      <ul className="pending-list">{readiness?.pending_live_evidence.map(item => <li key={item}>{item}</li>)}</ul>
+    </PageCard>
 
     <div className="two-column-grid">
       <PageCard title="How to read this screen" accent="#7c6ff7">
