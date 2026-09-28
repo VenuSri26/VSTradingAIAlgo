@@ -5,7 +5,7 @@ import type { VersionInfo } from "../types/operations";
 
 const titles: Record<AppPage, { title: string; subtitle: string }> = {
   overview: { title: "Market Overview", subtitle: "Multi-agent Nifty50 decision support" },
-  "auto-paper": { title: "Autonomous Paper", subtitle: "V7.8 loop status, decisions and paper journal" },
+  "auto-paper": { title: "Autonomous Paper", subtitle: "V7.9 full-pipeline decisions, costs and journal" },
   trading: { title: "Trading Workspace", subtitle: "Trade setups, execution and monitoring" },
   portfolio: { title: "Paper Portfolio", subtitle: "Open positions, journal and performance" },
   analytics: { title: "Analytics", subtitle: "Session metrics and decision quality" },

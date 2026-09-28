@@ -8,6 +8,7 @@ from typing import Any
 from app import store
 from app.config import settings
 from app.live_intelligence import analyse_live_market
+from app.version import APP_VERSION
 
 REQUIRED_CONFIRMATION_TEXT = "PREPARE_PAPER_SETUP"
 
@@ -72,6 +73,30 @@ def build_paper_setup_candidate(
     if option_type and leg is None:
         blockers.append(f"No tradable {option_type} contract found near ATM")
 
+    if leg is not None:
+        bid = _num(leg.get("bid"))
+        ask = _num(leg.get("ask"))
+        oi = _num(leg.get("oi"))
+        volume = _num(leg.get("volume"))
+        if bid <= 0 or ask <= 0 or ask < bid:
+            blockers.append("Selected option has no valid two-sided bid/ask quote")
+        else:
+            mid = (bid + ask) / 2
+            spread_pct = (ask - bid) / mid * 100 if mid > 0 else 999.0
+            if spread_pct > settings.paper_max_option_spread_pct:
+                blockers.append(
+                    f"Selected option spread {spread_pct:.2f}% exceeds "
+                    f"{settings.paper_max_option_spread_pct:.2f}%"
+                )
+        if oi < settings.paper_min_option_oi:
+            blockers.append(
+                f"Selected option OI {oi:.0f} is below {settings.paper_min_option_oi}"
+            )
+        if volume < settings.paper_min_option_volume:
+            blockers.append(
+                f"Selected option volume {volume:.0f} is below {settings.paper_min_option_volume}"
+            )
+
     if blockers:
         return {
             "status": "BLOCKED",
@@ -85,7 +110,9 @@ def build_paper_setup_candidate(
             "candidate": None,
         }
 
-    entry = round(_num(leg.get("ltp")), 2)
+    # A paper BUY fills from the ask side, not the optimistic last-traded
+    # price. The configured slippage is applied later by the paper ledger.
+    entry = round(_num(leg.get("ask")), 2)
     strike = int(_num(leg.get("strike")))
     stop_loss = round(entry * (1 - settings.paper_default_stop_loss_pct / 100), 2)
     target_1 = round(entry * 1.30, 2)
@@ -115,8 +142,16 @@ def build_paper_setup_candidate(
         "captured_at": captured_at,
         "expiry": snapshot.get("expiry"),
         "rationale": rationale,
+        "strategy_version": APP_VERSION,
     }
-    signature = hashlib.sha256(json.dumps(candidate, sort_keys=True).encode()).hexdigest()
+    reproducibility_record = {
+        "candidate": candidate,
+        "input_snapshot": snapshot,
+        "strategy_version": APP_VERSION,
+    }
+    signature = hashlib.sha256(
+        json.dumps(reproducibility_record, sort_keys=True, default=str).encode()
+    ).hexdigest()
     return {
         "status": "READY_FOR_HUMAN_REVIEW",
         "action": "PREPARE_PAPER_SETUP",
@@ -128,6 +163,8 @@ def build_paper_setup_candidate(
         "warnings": warnings,
         "blockers": [],
         "candidate": candidate,
+        "input_snapshot": snapshot,
+        "strategy_version": APP_VERSION,
     }
 
 
@@ -151,6 +188,10 @@ def build_paper_setup_payload(result: dict[str, Any]) -> dict[str, Any]:
         },
         "live_intelligence": result["intelligence"],
         "live_trend": result["trend"],
+        "finalized_candle": result.get("finalized_candle"),
+        "input_snapshot": result.get("input_snapshot"),
+        "strategy_version": result.get("strategy_version") or c.get("strategy_version"),
+        "full_pipeline": result.get("full_pipeline"),
         "source": "LIVE_PAPER_BRIDGE",
         "execution_mode": "PAPER_ONLY",
     }

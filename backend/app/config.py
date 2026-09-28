@@ -50,8 +50,18 @@ class Settings:
     max_risk_per_trade_pct: float = float(os.getenv("MAX_RISK_PER_TRADE_PCT", "2"))
     paper_slippage_rupees: float = float(os.getenv("PAPER_SLIPPAGE_RUPEES", "0.5"))
     paper_cost_rate: float = float(os.getenv("PAPER_COST_RATE", "0.0015"))
+    paper_brokerage_per_order: float = float(os.getenv("PAPER_BROKERAGE_PER_ORDER", "20"))
+    paper_brokerage_rate: float = float(os.getenv("PAPER_BROKERAGE_RATE", "0.0003"))
+    paper_stt_sell_rate: float = float(os.getenv("PAPER_STT_SELL_RATE", "0.001"))
+    paper_exchange_charge_rate: float = float(os.getenv("PAPER_EXCHANGE_CHARGE_RATE", "0.0003503"))
+    paper_sebi_charge_rate: float = float(os.getenv("PAPER_SEBI_CHARGE_RATE", "0.000001"))
+    paper_stamp_duty_buy_rate: float = float(os.getenv("PAPER_STAMP_DUTY_BUY_RATE", "0.00003"))
+    paper_gst_rate: float = float(os.getenv("PAPER_GST_RATE", "0.18"))
     paper_profit_withdrawal_threshold: float = float(os.getenv("PAPER_PROFIT_WITHDRAWAL_THRESHOLD", "100000"))
     paper_default_stop_loss_pct: float = float(os.getenv("PAPER_DEFAULT_STOP_LOSS_PCT", "20"))
+    paper_min_option_oi: int = int(os.getenv("PAPER_MIN_OPTION_OI", "100"))
+    paper_min_option_volume: int = int(os.getenv("PAPER_MIN_OPTION_VOLUME", "1"))
+    paper_max_option_spread_pct: float = float(os.getenv("PAPER_MAX_OPTION_SPREAD_PCT", "5"))
     min_agent_coverage: float = float(os.getenv("MIN_AGENT_COVERAGE", "0.70"))
     max_agent_disagreement: float = float(os.getenv("MAX_AGENT_DISAGREEMENT", "0.45"))
 
@@ -71,6 +81,7 @@ class Settings:
     paper_auto_trader_grades: str = os.getenv("PAPER_AUTO_TRADER_GRADES", "A,A+")
     paper_auto_trader_atm_range: int = int(os.getenv("PAPER_AUTO_TRADER_ATM_RANGE", "8"))
     paper_auto_trader_max_age_sec: int = int(os.getenv("PAPER_AUTO_TRADER_MAX_AGE_SEC", "30"))
+    paper_require_full_pipeline: bool = os.getenv("PAPER_REQUIRE_FULL_PIPELINE", "true").lower() in ("1", "true", "yes", "on")
 
     market_data_supervisor_enabled: bool = os.getenv("MARKET_DATA_SUPERVISOR_ENABLED", "true").lower() in ("1", "true", "yes", "on")
     market_data_poll_interval_sec: float = float(os.getenv("MARKET_DATA_POLL_INTERVAL_SEC", "3"))
@@ -331,10 +342,27 @@ def validate(settings_obj: Settings = settings) -> list[str]:
         problems.append("PAPER_SLIPPAGE_RUPEES must be >= 0")
     if settings_obj.paper_cost_rate < 0:
         problems.append("PAPER_COST_RATE must be >= 0")
+    for name, value in (
+        ("PAPER_BROKERAGE_PER_ORDER", settings_obj.paper_brokerage_per_order),
+        ("PAPER_BROKERAGE_RATE", settings_obj.paper_brokerage_rate),
+        ("PAPER_STT_SELL_RATE", settings_obj.paper_stt_sell_rate),
+        ("PAPER_EXCHANGE_CHARGE_RATE", settings_obj.paper_exchange_charge_rate),
+        ("PAPER_SEBI_CHARGE_RATE", settings_obj.paper_sebi_charge_rate),
+        ("PAPER_STAMP_DUTY_BUY_RATE", settings_obj.paper_stamp_duty_buy_rate),
+        ("PAPER_GST_RATE", settings_obj.paper_gst_rate),
+    ):
+        if value < 0:
+            problems.append(f"{name} must be >= 0")
     if settings_obj.paper_profit_withdrawal_threshold < 0:
         problems.append("PAPER_PROFIT_WITHDRAWAL_THRESHOLD must be >= 0")
     if not 1 <= settings_obj.paper_default_stop_loss_pct <= 50:
         problems.append("PAPER_DEFAULT_STOP_LOSS_PCT must be between 1 and 50")
+    if settings_obj.paper_min_option_oi < 0:
+        problems.append("PAPER_MIN_OPTION_OI must be >= 0")
+    if settings_obj.paper_min_option_volume < 0:
+        problems.append("PAPER_MIN_OPTION_VOLUME must be >= 0")
+    if not 0 < settings_obj.paper_max_option_spread_pct <= 20:
+        problems.append("PAPER_MAX_OPTION_SPREAD_PCT must be between 0 and 20")
     if not 0.5 <= settings_obj.min_agent_coverage <= 1.0:
         problems.append("MIN_AGENT_COVERAGE must be between 0.5 and 1.0")
     if not 0.0 <= settings_obj.max_agent_disagreement <= 1.0:

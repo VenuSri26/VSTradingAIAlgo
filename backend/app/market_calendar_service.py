@@ -21,6 +21,27 @@ class MarketCalendarService:
             return []
         return sorted(data if isinstance(data, list) else [], key=lambda x: x.get("date", ""))
 
+    def holiday_dates(self, *, strict: bool = False) -> list[str]:
+        """Return validated ISO dates for safety-critical session decisions."""
+        if not self.path.exists():
+            return []
+        try:
+            raw = json.loads(self.path.read_text(encoding="utf-8"))
+            if not isinstance(raw, list):
+                raise ValueError("holiday calendar must contain a JSON list")
+            result: list[str] = []
+            for item in raw:
+                if not isinstance(item, dict):
+                    raise ValueError("holiday calendar entries must be objects")
+                value = str(item.get("date") or "")
+                date.fromisoformat(value)
+                result.append(value)
+            return sorted(set(result))
+        except (json.JSONDecodeError, OSError, TypeError, ValueError) as exc:
+            if strict:
+                raise RuntimeError(f"MARKET_CALENDAR_INVALID: {self.path}: {exc}") from exc
+            return []
+
     def replace(self, holidays: list[dict[str, Any]]) -> dict[str, Any]:
         cleaned = []
         seen = set()

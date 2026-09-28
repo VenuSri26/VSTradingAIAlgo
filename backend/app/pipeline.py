@@ -1,5 +1,5 @@
 from __future__ import annotations
-from datetime import datetime, timezone, time
+from datetime import datetime, timedelta, timezone, time
 from zoneinfo import ZoneInfo
 
 from app.config import settings
@@ -141,13 +141,31 @@ def _pipeline_now(as_of: datetime | None = None) -> datetime:
     return value.astimezone(timezone.utc)
 
 
+def _completed_three_minute_rows(frame, now: datetime):
+    """Return only exchange-aligned rows whose complete 3-minute window ended."""
+    if frame is None or frame.empty:
+        raise DataUnavailable("FINALIZED_CANDLE_UNAVAILABLE")
+    index = frame.index
+    if getattr(index, "tz", None) is None:
+        raise DataUnavailable("FINALIZED_CANDLE_INVALID: timezone missing")
+    aligned = [
+        ts.minute % 3 == 0 and ts.second == 0 and
+        ts.to_pydatetime().astimezone(timezone.utc) + timedelta(minutes=3) <= now
+        for ts in index
+    ]
+    completed = frame.loc[aligned]
+    if completed.empty:
+        raise DataUnavailable("UNFINALIZED_CANDLE: no completed 3m candle")
+    return completed
+
+
 def run_pipeline(data_source: DataSource, position: PositionInfo | None = None, as_of: datetime | None = None) -> LiveDecisionResponse:
     now = _pipeline_now(as_of)
     components: list[ComponentHealth] = []
 
     # ---- 1. fetch market data (fail loud, never fabricate) -----------
     try:
-        df_3m = data_source.get_ohlc("3m", 150)
+        df_3m = _completed_three_minute_rows(data_source.get_ohlc("3m", 151), now).tail(150)
         df_1d = data_source.get_ohlc("1d", 5)
         spot = data_source.get_spot()
         vix = data_source.get_vix()

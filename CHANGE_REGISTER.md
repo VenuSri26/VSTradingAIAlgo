@@ -377,3 +377,22 @@ Approver / verifier:
 - **Compatibility:** Existing Strategy Lab fields remain valid. `advanced_validation`, `research_trials`, purged splits, and research certification are additive.
 - **Validation:** 12 focused Strategy Lab tests and 227 full backend tests passed; frontend production build passed; npm audit found 0 vulnerabilities; runtime safety and `git diff --check` passed.
 - **Rollback:** Revert this additive checkpoint; no schema or persisted-data migration is required.
+# 7.8.4 adversarial audit (2026-09-26)
+
+| Files/modules | Reason and implementation | Compatibility | Verification | Deploy / rollback |
+|---|---|---|---|---|
+| `paper_auto_trader.py`, `market_calendar_service.py` | Require an aligned completed 3-minute candle; use its start as idempotency key; connect and strictly validate managed holidays | Existing callers retained | finalized/unfinalized, duplicate, holiday and corruption tests | deploy normally; rollback release symlink |
+| `live_paper_bridge.py`, `config.py`, `.env.example` | Add two-sided quote, maximum spread, minimum OI/volume gates and strategy/input snapshots | New settings have conservative defaults | bridge and E2E tests | disable auto trader to roll back behavior |
+| `store.py`, `paper_trade_management.py`, `paper_journal.py`, migration `009` | Persist reference/slippage/lowest price and report MFE/MAE | additive migration | lifecycle/journal/restart tests | restore DB backup only with schema review |
+| dependency manifests | Upgrade direct vulnerable/outdated dependencies | FastAPI/pytest behavior tested | full backend, frontend build, audits | reinstall previous lockfile in previous release |
+| release hygiene | Exclude runtime DB/log data and obsolete backup source copies | no runtime API impact | secret/file scan and ZIP listing | quarantined originals retained outside archive |
+
+See `AUDIT_REPORT_7.8.4.md`, `TEST_REPORT_7.8.4.md`, and `DEPLOYMENT_7.8.4.md` for limits and exact evidence.
+# 7.9.0 paper certification (2026-09-26)
+
+| Files/modules | Improvement | Tests / rollback |
+|---|---|---|
+| `paper_decision_orchestrator.py`, `paper_auto_trader.py`, `pipeline.py` | Require the complete versioned multi-agent decision to agree with the OI/PCR candidate; independently enforce finalized candles | V7.9 orchestrator/pipeline tests; disable paper automation or roll back release symlink |
+| `paper_costs.py`, `paper_trade_management.py`, `paper_journal.py`, `config.py` | Itemized and configurable India-options paper cost evidence | deterministic cost and lifecycle tests; restore previous release for old model |
+| `PaperAutomationPage.tsx`, API types/status | Show full-pipeline requirement, decision/grade and cost-model version | TypeScript/Vite build |
+| readiness, env template and docs | Block readiness when full pipeline is bypassed or WebSocket is requested | readiness tests and configuration validation |

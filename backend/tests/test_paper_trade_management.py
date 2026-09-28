@@ -38,6 +38,15 @@ def test_target_one_books_partial_and_moves_stop(tmp_path, monkeypatch):
     persisted = get_management(tid)
     assert persisted["partial_target_done"] == 1
     assert persisted["realized_quantity"] == settings.nifty_lot_size
+    assert persisted["highest_price"] == 121
+    assert persisted["lowest_price"] == 100
+
+
+def test_management_tracks_adverse_excursion(tmp_path, monkeypatch):
+    trade, tid = _open(tmp_path, monkeypatch, settings.nifty_lot_size)
+    result = evaluate(trade, 95)
+    assert result["action"] == "HOLD"
+    assert get_management(tid)["lowest_price"] == 95
 
 
 def test_trailing_stop_closes_remaining_with_aggregate_pnl(tmp_path, monkeypatch):

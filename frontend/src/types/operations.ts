@@ -137,6 +137,7 @@ export interface PaperAutomationStatus {
   last_checked_at:string|null; last_action:string; last_reason:string|null;
   last_setup_id:number|null; last_trade_id:number|null; enabled:boolean; interval_sec:number;
   minimum_score:number; allowed_grades:string; execution_mode:"PAPER_ONLY";
+  full_pipeline_required:boolean; cost_model_version:string;
   live_orders_enabled:false; persistent_today:PaperAutomationSummary; recent_runs:PaperAutomationRun[];
 }
 export interface PaperMonitorStatus {

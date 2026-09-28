@@ -314,10 +314,12 @@ def open_paper_trade(setup_id: int, quantity: int, entry_price: float, slippage_
     with _conn() as conn:
         cur = conn.execute(
             """INSERT INTO paper_trades (setup_id, trading_day, option_type, strike, quantity,
-               entry_price, stop_loss, target_1, target_2, opened_at, status)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN')""",
+               entry_price, entry_reference, entry_slippage, stop_loss, target_1, target_2,
+               opened_at, status)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN')""",
             (setup_id, _today(), setup["option_type"], setup["strike"], quantity, effective_entry,
-             setup["stop_loss"], setup["target_1"], setup["target_2"], datetime.now(timezone.utc).isoformat()),
+             entry_price, round(effective_entry - entry_price, 2), setup["stop_loss"],
+             setup["target_1"], setup["target_2"], datetime.now(timezone.utc).isoformat()),
         )
         conn.execute("UPDATE trade_setups SET status = 'PAPER_OPEN' WHERE id = ?", (setup_id,))
         return cur.lastrowid

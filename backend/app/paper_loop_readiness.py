@@ -1,4 +1,4 @@
-"""Holiday-safe readiness certificate for the v7.8 autonomous paper loop."""
+"""Fail-closed readiness certificate for the v7.9 paper pipeline."""
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -54,6 +54,10 @@ def paper_loop_readiness() -> dict[str, Any]:
                f"enabled={settings.paper_auto_monitor_enabled}; interval={settings.paper_monitor_interval_sec}s"),
         _check("QUALITY_GATE", "A/A+ quality gate", 1 <= settings.paper_auto_trader_min_score <= 100,
                f"grades={settings.paper_auto_trader_grades}; minimum_score={settings.paper_auto_trader_min_score}"),
+        _check("FULL_PIPELINE", "Full multi-agent corroboration", settings.paper_require_full_pipeline,
+               f"PAPER_REQUIRE_FULL_PIPELINE={str(settings.paper_require_full_pipeline).lower()}"),
+        _check("WEBSOCKET_OFF", "Vulnerable WebSocket dependency isolated", not settings.kite_websocket_requested,
+               f"KITE_WEBSOCKET_REQUESTED={str(settings.kite_websocket_requested).lower()}"),
         _check("FRESHNESS_GATE", "Quote freshness gate", settings.paper_monitor_max_age_sec > 0,
                f"maximum quote age={settings.paper_monitor_max_age_sec}s"),
         _check("SESSION_TIMES", "Entry and EOD timing", None not in (entry_cutoff, eod_exit, market_close)

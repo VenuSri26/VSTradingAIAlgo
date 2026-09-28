@@ -21,6 +21,13 @@ function stateTone(action?: string) {
   return "";
 }
 
+function pipelineEvidence(run: {details?: Record<string, unknown>}) {
+  const preview = run.details?.preview as Record<string, unknown> | undefined;
+  const pipeline = (run.details?.full_pipeline ?? preview?.full_pipeline) as Record<string, unknown> | undefined;
+  if (!pipeline) return "—";
+  return `${String(pipeline.decision ?? "—")} / ${String(pipeline.grade ?? "—")}`;
+}
+
 export function PaperAutomationPage() {
   const [automation, setAutomation] = useState<PaperAutomationStatus | null>(null);
   const [monitor, setMonitor] = useState<PaperMonitorStatus | null>(null);
@@ -61,7 +68,7 @@ export function PaperAutomationPage() {
 
     <section className={`automation-banner ${ready ? "ready" : "blocked"}`}>
       <div>
-        <span className="eyebrow">V7.8 AUTONOMOUS PAPER LOOP</span>
+        <span className="eyebrow">V7.9 CERTIFIED PAPER PIPELINE</span>
         <h2>{ready ? "System is monitoring automatically" : "Automation needs attention"}</h2>
         <p className={stateTone(automation?.last_action)}>
           {automation?.last_action ?? "LOADING"}{automation?.last_reason ? ` — ${automation.last_reason}` : ""}
@@ -114,6 +121,8 @@ export function PaperAutomationPage() {
           <div><strong>Entry interval</strong><span>{automation?.interval_sec ?? "—"} seconds</span></div>
           <div><strong>Minimum score</strong><span>{automation?.minimum_score ?? "—"}</span></div>
           <div><strong>Allowed grades</strong><span>{automation?.allowed_grades ?? "—"}</span></div>
+          <div><strong>Full multi-agent gate</strong><span>{automation?.full_pipeline_required ? "REQUIRED" : "DISABLED"}</span></div>
+          <div><strong>Cost model</strong><span>{automation?.cost_model_version ?? "—"}</span></div>
           <div><strong>Monitor interval</strong><span>{monitor?.interval_sec ?? "—"} seconds</span></div>
           <div><strong>Maximum quote age</strong><span>{monitor?.max_quote_age_sec ?? "—"} seconds</span></div>
           <div><strong>EOD exit</strong><span>{monitor?.eod_exit_time ?? "—"} IST</span></div>
@@ -135,12 +144,12 @@ export function PaperAutomationPage() {
 
     <PageCard title="Recent Autonomous Decisions" accent="#f59e0b">
       <div className="table-scroll"><table className="data-table">
-        <thead><tr><th>Time (IST)</th><th>Action</th><th>Reason</th><th>Setup</th><th>Trade</th></tr></thead>
+        <thead><tr><th>Time (IST)</th><th>Action</th><th>Full pipeline</th><th>Reason</th><th>Setup</th><th>Trade</th></tr></thead>
         <tbody>{!automation?.recent_runs.length
-          ? <tr><td colSpan={5} className="empty-cell">No autonomous decisions recorded yet.</td></tr>
+          ? <tr><td colSpan={6} className="empty-cell">No autonomous decisions recorded yet.</td></tr>
           : automation.recent_runs.map(run => <tr key={run.id}>
             <td>{when(run.checked_at)}</td><td className={stateTone(run.action)}>{run.action}</td>
-            <td className="reason-cell">{run.reason ?? "—"}</td><td>{run.setup_id ? `#${run.setup_id}` : "—"}</td>
+            <td>{pipelineEvidence(run)}</td><td className="reason-cell">{run.reason ?? "—"}</td><td>{run.setup_id ? `#${run.setup_id}` : "—"}</td>
             <td>{run.trade_id ? `#${run.trade_id}` : "—"}</td>
           </tr>)}</tbody>
       </table></div>

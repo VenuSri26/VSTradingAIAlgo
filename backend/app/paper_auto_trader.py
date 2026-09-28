@@ -9,7 +9,7 @@ import asyncio
 import logging
 import threading
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 from zoneinfo import ZoneInfo
 
@@ -20,6 +20,7 @@ from app.live_intelligence import analyse_live_market
 from app.live_intelligence_history import record_snapshot
 from app.live_paper_bridge import build_paper_setup_candidate, prepare_paper_setup_from_preview
 from app.market_clock import market_clock
+from app.market_calendar_service import MarketCalendarService
 from app.observability import record_alert
 from app.risk_supervisor import evaluate_paper_entry
 
@@ -90,16 +91,43 @@ def _finish(action: str, reason: str | None = None, *, setup_id: int | None = No
             "execution_mode": "PAPER_ONLY", "live_orders_enabled": False}
 
 
-def _cycle_key(snapshot: dict[str, Any]) -> str | None:
-    raw = snapshot.get("timestamp") or snapshot.get("captured_at")
-    if not raw:
-        return None
+def _finalized_candle(data_source: Any, now: datetime) -> dict[str, Any]:
+    """Return evidence for the latest *completed* three-minute candle.
+
+    Option-chain quote timestamps are not candle-finalization evidence.  The
+    previous implementation rounded that timestamp and could therefore open a
+    paper trade while the corresponding candle was still forming.  Require the
+    canonical DataSource OHLC contract and independently verify its boundary.
+    """
+    if not hasattr(data_source, "get_ohlc"):
+        raise RuntimeError("FINALIZED_CANDLE_UNAVAILABLE: data source has no 3m OHLC capability")
+    frame = data_source.get_ohlc("3m", 2)
+    if frame is None or len(frame) == 0:
+        raise RuntimeError("FINALIZED_CANDLE_UNAVAILABLE: no completed 3m candle")
+    raw_start = frame.index[-1]
     try:
-        dt = datetime.fromisoformat(str(raw).replace("Z", "+00:00")).astimezone(timezone.utc)
-    except (TypeError, ValueError):
-        return None
-    minute = dt.minute - (dt.minute % 3)
-    return dt.replace(minute=minute, second=0, microsecond=0).isoformat()
+        start = raw_start.to_pydatetime() if hasattr(raw_start, "to_pydatetime") else raw_start
+        if not isinstance(start, datetime) or start.tzinfo is None:
+            raise ValueError("timezone missing")
+        start = start.astimezone(timezone.utc).replace(second=0, microsecond=0)
+    except (TypeError, ValueError, AttributeError) as exc:
+        raise RuntimeError("FINALIZED_CANDLE_INVALID: timestamp must be timezone-aware") from exc
+    if start.minute % 3:
+        raise RuntimeError("FINALIZED_CANDLE_INVALID: timestamp is not aligned to a 3m boundary")
+    end = start + timedelta(minutes=3)
+    if end > now.astimezone(timezone.utc):
+        raise RuntimeError("UNFINALIZED_CANDLE: latest 3m candle is still forming")
+    row = frame.iloc[-1]
+    return {
+        "start": start.isoformat(),
+        "end": end.isoformat(),
+        "open": float(row["open"]),
+        "high": float(row["high"]),
+        "low": float(row["low"]),
+        "close": float(row["close"]),
+        "volume": float(row["volume"]),
+        "finalized": True,
+    }
 
 
 def run_once(data_source: Any, now: datetime | None = None,
@@ -114,7 +142,15 @@ def run_once(data_source: Any, now: datetime | None = None,
     if settings.live_orders_enabled:
         return _finish("BLOCKED", "Safety invariant violated: LIVE_ORDERS_ENABLED must be false")
 
-    clock = market_clock(now, settings.market_holidays, settings.market_open_time, settings.market_close_time)
+    try:
+        managed_holidays = MarketCalendarService(settings.market_calendar_path).holiday_dates(strict=True)
+        configured_holidays = [x.strip() for x in settings.market_holidays.split(",") if x.strip()]
+        clock = market_clock(
+            now, sorted(set(configured_holidays + managed_holidays)),
+            settings.market_open_time, settings.market_close_time,
+        )
+    except Exception as exc:
+        return _finish("BLOCKED", f"MARKET_CALENDAR_UNAVAILABLE: {type(exc).__name__}: {exc}")
     if not clock.market_open:
         return _finish("WAITING", clock.reason, details={"market_clock": clock.to_dict()})
     if _cutoff_reached(now):
@@ -125,10 +161,11 @@ def run_once(data_source: Any, now: datetime | None = None,
         return _finish("WAITING", "RISK_COOLDOWN_ACTIVE")
 
     try:
-        snapshot = data_source.get_option_chain(atm_range=settings.paper_auto_trader_atm_range)
-        cycle_key = _cycle_key(snapshot)
-        if cycle_key and store.has_paper_automation_cycle(cycle_key):
+        candle = _finalized_candle(data_source, now)
+        cycle_key = candle["start"]
+        if store.has_paper_automation_cycle(cycle_key):
             return _finish("WAITING", "CANDLE_ALREADY_PROCESSED")
+        snapshot = data_source.get_option_chain(atm_range=settings.paper_auto_trader_atm_range)
         # The former manual preview depended on somebody opening the dashboard
         # to populate OI/PCR history. v7.8 records the sample itself, allowing
         # the autonomous loop to build directional evidence without UI traffic.
@@ -138,6 +175,10 @@ def run_once(data_source: Any, now: datetime | None = None,
         preview = build_paper_setup_candidate(
             snapshot, trend_provider(limit=60), max_age_sec=settings.paper_auto_trader_max_age_sec
         )
+        preview["finalized_candle"] = candle
+        if preview.get("status") == "READY_FOR_HUMAN_REVIEW" and settings.paper_require_full_pipeline:
+            from app.paper_decision_orchestrator import evaluate as evaluate_full_pipeline
+            preview = evaluate_full_pipeline(preview, data_source, as_of=now)
     except Exception as exc:
         message = f"BROKER_DATA_UNAVAILABLE: {type(exc).__name__}: {exc}"
         with _lock:
@@ -193,16 +234,20 @@ def run_once(data_source: Any, now: datetime | None = None,
     record_alert("INFO", "AUTONOMOUS_PAPER_TRADE_OPENED", f"Paper trade {trade_id} opened from setup {setup_id}")
     return _finish("PAPER_TRADE_OPENED", "A/A+ policy and risk checks passed",
                    setup_id=setup_id, trade_id=trade_id,
-                   details={"candidate": candidate, "risk": risk.to_dict()}, cycle_key=cycle_key)
+                   details={"candidate": candidate, "risk": risk.to_dict(),
+                            "full_pipeline": preview.get("full_pipeline")}, cycle_key=cycle_key)
 
 
 def status_snapshot() -> dict[str, Any]:
+    from app.paper_costs import COST_MODEL_VERSION
     with _lock:
         state = asdict(_state)
     return {**state, "enabled": settings.paper_auto_trader_enabled,
             "interval_sec": settings.paper_auto_trader_interval_sec,
             "minimum_score": settings.paper_auto_trader_min_score,
             "allowed_grades": settings.paper_auto_trader_grades,
+            "full_pipeline_required": settings.paper_require_full_pipeline,
+            "cost_model_version": COST_MODEL_VERSION,
             "execution_mode": "PAPER_ONLY", "live_orders_enabled": False,
             "persistent_today": store.paper_automation_summary(),
             "recent_runs": store.list_paper_automation_runs(limit=10)}

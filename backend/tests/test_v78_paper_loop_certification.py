@@ -1,5 +1,6 @@
 """Deterministic, broker-free certification of the complete v7.8 paper loop."""
 from datetime import datetime, timezone
+import pandas as pd
 
 from app import store
 from app.config import settings
@@ -19,12 +20,26 @@ class ScenarioSource:
             "spot": 25210,
             "expiry": "2026-10-01",
             "chain": {
-                "CE": [{"strike": 25200, "oi": 500, "ltp": self.price,
+                "CE": [{"strike": 25200, "oi": 500, "volume": 1000, "ltp": self.price,
+                        "bid": self.price - 1, "ask": self.price + 1,
                         "quote_timestamp": self.timestamp}],
-                "PE": [{"strike": 25200, "oi": 1000, "ltp": 92,
+                "PE": [{"strike": 25200, "oi": 1000, "volume": 1000, "ltp": 92,
+                        "bid": 91, "ask": 93,
                         "quote_timestamp": self.timestamp}],
             },
         }
+
+    def get_ohlc(self, timeframe="3m", lookback=2):
+        end = datetime.fromisoformat(self.timestamp).astimezone(timezone.utc)
+        start = end.replace(minute=end.minute - (end.minute % 3), second=0, microsecond=0)
+        # The fixture timestamp represents a fresh quote at the boundary; the
+        # latest completed bar is the immediately preceding three-minute bar.
+        index = pd.DatetimeIndex([start.replace(minute=start.minute - 3), start])
+        return pd.DataFrame(
+            {"open": [25200, 25205], "high": [25210, 25220],
+             "low": [25190, 25200], "close": [25205, 25210],
+             "volume": [1000, 1200]}, index=index,
+        ).iloc[:1].tail(lookback)
 
 
 def test_complete_autonomous_paper_lifecycle_survives_state_reset(tmp_path, monkeypatch):
@@ -39,6 +54,7 @@ def test_complete_autonomous_paper_lifecycle_survives_state_reset(tmp_path, monk
     monkeypatch.setattr(settings, "max_capital_utilization_pct", 80.0)
     monkeypatch.setattr(settings, "risk_cooldown_minutes", 0)
     monkeypatch.setattr(settings, "nifty_lot_size", 65)
+    monkeypatch.setattr(settings, "paper_require_full_pipeline", False)
     monkeypatch.setattr(settings, "paper_monitor_max_age_sec", 30)
 
     opened_at = datetime(2026, 9, 28, 4, 30, tzinfo=timezone.utc)
@@ -68,6 +84,10 @@ def test_complete_autonomous_paper_lifecycle_survives_state_reset(tmp_path, monk
     assert rows[0]["trade_id"] == trade_id
     assert rows[0]["status"] == "CLOSED_EOD"
     assert rows[0]["net_pnl"] is not None
+    assert rows[0]["strategy_version"] == "7.9.0-paper-rc1"
+    assert rows[0]["mfe"] is not None
+    assert rows[0]["mae"] is not None
+    assert rows[0]["entry_reference"] == 101.0
     summary = daily_summary()
     assert summary["journal_entries"] == 1
     assert summary["broker_orders_sent"] is False

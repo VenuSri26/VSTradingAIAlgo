@@ -75,8 +75,30 @@ class MonkeyPatch:
         setattr(obj, name, value)
         self._undo.append((obj, name, had_value, old_value))
 
+    def setenv(self, name, value):
+        had_value = name in os.environ
+        old_value = os.environ.get(name)
+        os.environ[name] = str(value)
+        self._undo.append(("__env__", name, had_value, old_value))
+
+    def delenv(self, name, raising=True):
+        had_value = name in os.environ
+        old_value = os.environ.get(name)
+        if not had_value:
+            if raising:
+                raise KeyError(name)
+            return
+        del os.environ[name]
+        self._undo.append(("__env__", name, had_value, old_value))
+
     def undo(self):
         for obj, name, had_value, old_value in reversed(self._undo):
+            if obj == "__env__":
+                if had_value:
+                    os.environ[name] = old_value
+                else:
+                    os.environ.pop(name, None)
+                continue
             if had_value:
                 setattr(obj, name, old_value)
             else:

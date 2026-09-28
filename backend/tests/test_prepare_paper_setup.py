@@ -34,12 +34,12 @@ def _snapshot():
         "expiry": "2026-08-06",
         "chain": {
             "CE": [
-                {"strike": 25200, "oi": 500, "ltp": 100},
-                {"strike": 25250, "oi": 900, "ltp": 72},
+                {"strike": 25200, "oi": 500, "volume": 1000, "ltp": 100, "bid": 99, "ask": 101},
+                {"strike": 25250, "oi": 900, "volume": 1000, "ltp": 72, "bid": 71, "ask": 73},
             ],
             "PE": [
-                {"strike": 25200, "oi": 1000, "ltp": 92},
-                {"strike": 25150, "oi": 700, "ltp": 65},
+                {"strike": 25200, "oi": 1000, "volume": 1000, "ltp": 92, "bid": 91, "ask": 93},
+                {"strike": 25150, "oi": 700, "volume": 1000, "ltp": 65, "bid": 64, "ask": 66},
             ],
         },
     }

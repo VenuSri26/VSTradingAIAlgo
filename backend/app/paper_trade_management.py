@@ -11,6 +11,7 @@ from typing import Any
 
 from app import store
 from app.config import settings
+from app.paper_costs import option_trade_costs
 
 
 def _now() -> str:
@@ -24,12 +25,12 @@ def ensure_management(trade: dict[str, Any]) -> dict[str, Any]:
             return dict(row)
         conn.execute(
             """INSERT INTO paper_trade_management
-               (trade_id, original_quantity, remaining_quantity, highest_price,
+               (trade_id, original_quantity, remaining_quantity, highest_price, lowest_price,
                 active_stop_loss, trail_distance_pct, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 trade["id"], trade["quantity"], trade["quantity"], trade["entry_price"],
-                trade["stop_loss"], 10.0, _now(),
+                trade["entry_price"], trade["stop_loss"], 10.0, _now(),
             ),
         )
         row = conn.execute("SELECT * FROM paper_trade_management WHERE trade_id=?", (trade["id"],)).fetchone()
@@ -75,12 +76,12 @@ def _persist(state: dict[str, Any]) -> dict[str, Any]:
     with store._conn() as conn:
         conn.execute(
             """UPDATE paper_trade_management SET remaining_quantity=?, realized_quantity=?,
-               realized_gross_pnl=?, realized_costs=?, highest_price=?, active_stop_loss=?,
+               realized_gross_pnl=?, realized_costs=?, highest_price=?, lowest_price=?, active_stop_loss=?,
                partial_target_done=?, breakeven_armed=?, trailing_enabled=?, trail_distance_pct=?,
                last_action=?, updated_at=? WHERE trade_id=?""",
             (
                 state["remaining_quantity"], state["realized_quantity"], state["realized_gross_pnl"],
-                state["realized_costs"], state["highest_price"], state["active_stop_loss"],
+                state["realized_costs"], state["highest_price"], state["lowest_price"], state["active_stop_loss"],
                 state["partial_target_done"], state["breakeven_armed"], state["trailing_enabled"],
                 state["trail_distance_pct"], state["last_action"], _now(), state["trade_id"],
             ),
@@ -96,6 +97,7 @@ def evaluate(trade: dict[str, Any], current_price: float, *, force_eod: bool = F
     """
     state = ensure_management(trade)
     state["highest_price"] = max(float(state["highest_price"]), current_price)
+    state["lowest_price"] = min(float(state.get("lowest_price") or trade["entry_price"]), current_price)
     actions: list[str] = []
 
     target_1 = float(trade.get("target_1") or 0)
@@ -106,7 +108,7 @@ def evaluate(trade: dict[str, Any], current_price: float, *, force_eod: bool = F
         qty = _partial_quantity(int(state["remaining_quantity"]))
         if qty:
             gross = round((current_price - entry) * qty, 2)
-            costs = round((entry + current_price) * qty * settings.paper_cost_rate, 2)
+            costs = option_trade_costs(entry, current_price, qty)["total"]
             state["remaining_quantity"] -= qty
             state["realized_quantity"] += qty
             state["realized_gross_pnl"] = round(float(state["realized_gross_pnl"]) + gross, 2)
@@ -136,7 +138,7 @@ def evaluate(trade: dict[str, Any], current_price: float, *, force_eod: bool = F
     if close_status:
         remaining = int(state["remaining_quantity"])
         remaining_gross = round((current_price - entry) * remaining, 2)
-        remaining_costs = round((entry + current_price) * remaining * settings.paper_cost_rate, 2)
+        remaining_costs = option_trade_costs(entry, current_price, remaining)["total"]
         gross = round(float(state["realized_gross_pnl"]) + remaining_gross, 2)
         costs = round(float(state["realized_costs"]) + remaining_costs, 2)
         closed = store.close_paper_trade_managed(
@@ -171,7 +173,7 @@ def close_manually(trade: dict[str, Any], current_price: float, reason: str = "M
     remaining = int(state["remaining_quantity"])
     entry = float(trade["entry_price"])
     gross = round(float(state["realized_gross_pnl"]) + (current_price - entry) * remaining, 2)
-    costs = round(float(state["realized_costs"]) + (entry + current_price) * remaining * settings.paper_cost_rate, 2)
+    costs = round(float(state["realized_costs"]) + option_trade_costs(entry, current_price, remaining)["total"], 2)
     closed = store.close_paper_trade_managed(trade["id"], current_price, "CLOSED_MANUAL", costs, reason, gross)
     if closed:
         state["remaining_quantity"] = 0

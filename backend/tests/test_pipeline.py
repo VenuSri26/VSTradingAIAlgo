@@ -32,6 +32,24 @@ def test_pipeline_runs_without_error(mock_source):
     assert resp.system_health.overall is not None
 
 
+def test_pipeline_drops_current_unfinalized_three_minute_row():
+    from datetime import datetime, timezone
+    from app.data_sources.base import DataUnavailable
+
+    class OnlyCurrent(MockDataSource):
+        def get_ohlc(self, timeframe, lookback):
+            if timeframe != "3m":
+                return super().get_ohlc(timeframe, lookback)
+            current = datetime.now(timezone.utc).replace(second=0, microsecond=0)
+            current = current.replace(minute=current.minute - current.minute % 3)
+            return pd.DataFrame({"open":[100], "high":[101], "low":[99], "close":[100], "volume":[1]},
+                                index=pd.DatetimeIndex([current]))
+
+    response = run_pipeline(OnlyCurrent())
+    assert response.decision.decision == DecisionType.NO_TRADE
+    assert "UNFINALIZED_CANDLE" in response.decision.explanation
+
+
 def test_no_trade_is_valid_default(mock_source):
     """With neutral/noisy mock data, system should default to NO_TRADE
     rather than forcing a trade — spec section 49's core principle."""
