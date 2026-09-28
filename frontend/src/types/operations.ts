@@ -123,3 +123,65 @@ export interface PaperManagementState {
   trail_distance_pct:number; last_action:string; updated_at:string;
 }
 export interface OpenPaperManagement { trade:PaperTrade|null; management:PaperManagementState|null; execution_mode?:string; }
+
+export interface PaperAutomationRun {
+  id:number; checked_at:string; trading_day:string; cycle_key:string|null; action:string;
+  reason:string|null; setup_id:number|null; trade_id:number|null; details?:Record<string,unknown>;
+}
+export interface PaperAutomationSummary {
+  trading_day:string; recorded_cycles:number; paper_trades_opened:number; blocked:number;
+  no_trade:number; actions:Record<string,number>;
+}
+export interface PaperAutomationStatus {
+  running:boolean; iterations:number; paper_trades_opened:number; blocked:number;
+  last_checked_at:string|null; last_action:string; last_reason:string|null;
+  last_setup_id:number|null; last_trade_id:number|null; enabled:boolean; interval_sec:number;
+  minimum_score:number; allowed_grades:string; execution_mode:"PAPER_ONLY";
+  full_pipeline_required:boolean; cost_model_version:string;
+  live_orders_enabled:false; persistent_today:PaperAutomationSummary; recent_runs:PaperAutomationRun[];
+}
+export interface PaperMonitorStatus {
+  running:boolean; iterations:number; successful_quotes:number; quote_failures:number;
+  last_checked_at:string|null; last_price:number|null; last_action:string;
+  last_error:string|null; active_trade_id:number|null; enabled:boolean; interval_sec:number;
+  max_quote_age_sec:number; eod_exit_time:string; execution_mode:"PAPER_ONLY";
+}
+export interface PaperDailySummary {
+  trading_day:string|null; portfolio:PaperPortfolioSummary; open_positions:Array<Record<string,unknown>>;
+  journal_entries:number; execution_mode:"PAPER_ONLY"; broker_orders_sent:false;
+}
+export interface PaperLoopReadiness {
+  generated_at:string; status:"OFFLINE_COMPLETE_LIVE_PENDING"|"OFFLINE_BLOCKED";
+  offline_complete:boolean; live_market_pending:boolean;
+  checks:Array<{code:string;label:string;passed:boolean;detail:string}>;
+  failed_checks:Array<{code:string;label:string;passed:boolean;detail:string}>;
+  pending_live_evidence:string[];
+  runtime:{automation_running:boolean;monitor_running:boolean;last_action:string|null;last_reason:string|null};
+  execution_mode:"PAPER_ONLY"; live_orders_enabled:boolean; recommended_action:string;
+}
+export interface TradingReport {
+  report_type:"PRE_MARKET"|"POST_MARKET"; generated_at:string; trading_day:string;
+  analysis:{status:string;message:string};
+  summary:{recommendations:number;decision_cycles:number;paper_trades:number;paper_open:number;
+    paper_net_pnl:number;zerodha_orders:number;zerodha_trades:number;unmatched_zerodha_orders:number;
+    application_execution_orders:number};
+  lineage:Array<{setup_id:number;recommendation:string;grade:string;score:number;contract:string;
+    setup_status:string;paper_trade_id:number|null;paper_status:string|null;
+    broker_order_id:string|null;broker_status:string|null;broker_match:string;execution_id:string|null}>;
+  unmatched_zerodha_orders:Array<Record<string,unknown>>;
+  safety:{execution_mode:string;live_orders_enabled:boolean;broker_access:string};
+}
+export interface TradingReportStatus {
+  pre_market:TradingReport|null; post_market:TradingReport|null;
+  schedulers:{pre_market:{configured_time:string;last_run_at:string|null;last_error:string|null};
+    post_market:{configured_time:string;last_run_at:string|null;last_error:string|null}};
+  execution_mode:"PAPER_ONLY"; live_orders_enabled:false;
+}
+export interface SetupConfiguration {
+  execution_mode:"PAPER_ONLY"; paper_enabled:boolean; live_mode_locked:true;
+  live_mode_unlock_requirement:string; live_orders_enabled:false;
+  minimum_confidence:number; capital:number; capital_min:number; capital_max:number;
+  profit_withdrawal_threshold:number; default_stop_loss_pct:number;
+  zerodha:{connected:boolean;checked_at?:string;source?:string;user_id?:string;error?:string};
+  https_required_for_token_refresh:boolean; https_configured:boolean; secrets_exposed:false;
+}

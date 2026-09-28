@@ -1,5 +1,46 @@
 # Changelog
 
+## 7.8.3-paper-rc1 - 2026-09-26
+
+- Made the desktop sidebar independently scrollable so every page remains
+  reachable at normal browser zoom.
+- Added browser-history routing so `/settings` and other page URLs open the
+  requested screen directly and survive refresh/back/forward navigation.
+- Made AWS deployment enforce Nginx-safe directory and frontend file
+  permissions, preventing the observed 500/internal redirect loop.
+
+## 7.8.2-paper-rc1 - 2026-09-26
+
+- Replaced the settings placeholder with a guided Setup console.
+- Added protected preference APIs for paper confidence, capital, profit alerts
+  and default stop-loss while permanently forcing live orders off.
+- Added HTTPS-only Zerodha login and redirect-token exchange from the UI.
+- Persisted setup changes to the shared environment with restricted permissions
+  and timestamped backups, without exposing broker secrets.
+- Applied the configured stop-loss to future paper entries and surfaced the
+  profit-withdrawal alert threshold in daily reporting.
+
+## 7.8.1-paper-rc1 - 2026-09-26
+
+- Added trading-day-only pre-market and post-market report schedulers.
+- Unified recommendations, autonomous decisions, paper outcomes and read-only
+  Zerodha orders/trades/positions in persistent daily reports.
+- Added durable execution-ledger correlation and explicit unmatched broker
+  order visibility for manual/external orders.
+- Added report APIs and a mobile-friendly reconciliation panel to Auto Paper.
+- Kept all report paths read-only with respect to broker execution.
+- Expanded deployment smoke tests and candidate-process isolation.
+
+## 7.8.0-paper-rc1 - 2026-09-26
+
+- Added an opt-in autonomous paper-only decision and entry worker.
+- Persisted one decision per finalized three-minute candle across restarts.
+- Reused A/A+, alignment, session, cooldown and risk-supervisor gates.
+- Made the worker collect OI/PCR history without requiring dashboard traffic.
+- Added structured broker-data failure responses and automation status APIs.
+- Clarified live market-data versus paper execution mode in health output.
+- Moved runtime databases and JSONL files out of Git-tracked release content.
+
 ## 2.6.0-rc.2
 - Removed hardcoded frontend version badge; UI now reads `/api/system/version`.
 - Added build ID, build time, commit, environment and active release metadata.
@@ -227,3 +268,8 @@ All notable VSTradingAI changes are recorded here. The project follows semantic 
 - Added configurable multi-session live-data certification.
 - Added certification notification report API and Live Intelligence panel.
 - Added cross-session readiness, WebSocket, error, and feed-age thresholds.
+## 7.5.3
+- Added optional read-only Upstox V3 Full Market Quote adapter for independent NIFTY 50 evidence.
+- Added provider-native instrument identity to MarketDataEnvelope V2.
+- Added multi-session shadow-consensus certification with explicit promotion blockers.
+- Preserved shadow-only defaults, disabled live orders, and made no AWS deployment changes.

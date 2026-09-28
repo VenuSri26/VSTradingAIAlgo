@@ -1,4 +1,64 @@
 
+## CR-2026-09-26-0783 — v7.8.3 Navigation and Deployment Repair
+
+| Field | Record |
+|---|---|
+| Date | 2026-09-26 |
+| Version | 7.8.3-paper-rc1 |
+| Category | Frontend navigation and AWS deployment reliability |
+| Problem / objective | Setup was hidden below the fixed-height sidebar, direct `/settings` navigation did not select Setup, and Nginx received permission denied after deployment |
+| Files and modules changed | Frontend application routing/CSS, AWS installer, version and release records |
+| Implementation summary | Added scrollable desktop navigation, URL/history synchronization, and explicit Nginx-readable release permissions after frontend build |
+| Trading logic impact | None |
+| Zerodha compatibility impact | None; credentials and broker behavior are unchanged |
+| API / database compatibility impact | None |
+| Security impact | Grants only directory traversal and static-file read permissions required by Nginx; backend environment and runtime data permissions remain unchanged |
+| Tests executed | Production frontend build, backend suite, shell syntax and Git whitespace checks |
+| Rollback procedure | Repoint current to V7.8.2 and restart services; the permission changes are limited to immutable static release files |
+| Pending follow-up | Add HTTPS before browser submission of admin or Zerodha credentials |
+
+## CR-2026-09-26-0782 — v7.8.2 Safe Setup Console
+
+| Field | Record |
+|---|---|
+| Date | 2026-09-26 |
+| Version | 7.8.2-paper-rc1 |
+| Category | Setup UI, configuration safety, Zerodha authentication |
+| Problem / objective | Let the operator configure paper trading and refresh Zerodha authentication from one guided screen without exposing live execution controls |
+| Files and modules changed | Setup service/routes/tests, configuration, paper bridge/reporting, Settings frontend, navigation, smoke test and release documentation |
+| Implementation summary | Added allowlisted persistent preferences, protected APIs, HTTPS-only Kite redirect exchange, sanitized status and a responsive Setup console |
+| Trading logic impact | Configured default stop-loss applies only to future paper entries; confidence and paper capital retain their existing gates |
+| Zerodha compatibility impact | Uses the official login URL, session exchange and profile verification; no order placement, modification or cancellation is added |
+| API / database compatibility impact | Additive `/api/setup/*` endpoints; no schema migration and no existing route removal |
+| Configuration changes | Added `PAPER_PROFIT_WITHDRAWAL_THRESHOLD` and `PAPER_DEFAULT_STOP_LOSS_PCT`; preference writes force `LIVE_ORDERS_ENABLED=false` |
+| Security impact | Secret-free status responses, HTTPS-only redirect submission, admin protection, `0600` environment permissions and backups |
+| Tests executed | Setup-focused backend tests, full backend suite, production frontend build, shell syntax, route probe and Git whitespace check |
+| Rollback procedure | Repoint `/opt/vstradingai/current` to the previous release and restart the API; restore a timestamped config backup only if preferences must also be reverted |
+| Known limitations | Public-IP HTTP cannot perform browser token exchange; automatic capital withdrawal is intentionally not implemented |
+| Pending follow-up | Configure a domain/TLS certificate, then verify the UI token flow and a complete live-market paper session |
+
+## CR-2026-09-26-0781 — v7.8.1 Reporting and Reconciliation
+
+| Field | Record |
+|---|---|
+| Date | 2026-09-26 |
+| Version | 7.8.1-paper-rc1 |
+| Category | Pre-market reporting, post-market reporting, broker reconciliation |
+| Problem / objective | Make the full daily lifecycle visible: recommendations, autonomous decisions, paper orders/results and any Nifty orders observed in Zerodha |
+| Files and modules changed | Trading-report service/routes/scheduler, application lifecycle, configuration, Auto Paper frontend, smoke tests, release documentation and tests |
+| Implementation summary | Added trading-day-only 09:00 IST pre-market and 15:40 IST post-market reports, persistent JSONL history, read-only Zerodha observations, execution-ledger correlation and unmatched manual-order visibility |
+| Trading logic impact | None; reports observe existing decisions and ledgers and cannot open or close positions |
+| Zerodha compatibility impact | Additive read-only calls to profile, orders, trades and positions; broker payload persistence uses a field allowlist |
+| API / database compatibility impact | Additive `/api/trading-reports/*` endpoints; no database migration or existing API removal |
+| Configuration changes | Added `TRADING_REPORT_*`, `PRE_MARKET_REPORT_TIME` and `POST_MARKET_REPORT_TIME`; defaults enable reporting while keeping live orders disabled |
+| Tests executed | Complete backend pytest suite, production frontend TypeScript/Vite build, FastAPI route startup probe and Git whitespace check |
+| Test results | 260 backend tests passed; frontend production build passed; `/api/trading-reports/status` returned HTTP 200 |
+| AWS deployment notes | Candidate process disables report schedulers; production smoke requires readiness and report status endpoints; report history resides under shared data |
+| Rollback procedure | Repoint `/opt/vstradingai/current` to the previous release and restart `vstradingai-api.service`; no schema rollback is required |
+| Known limitations | Actual strategy quality still requires live-session evidence; manual Zerodha orders without a VST execution tag remain intentionally unmatched |
+| Pending follow-up | Monday token refresh, pre-market report observation, live paper lifecycle and post-market reconciliation verification |
+| Approver / verifier | Pending AWS verification |
+
 ## 1.9.0 - 2026-08-02
 
 - Added restart-safe automated paper-trade monitoring.
@@ -7,6 +67,28 @@
 - Added persistent monitor event history and local JSONL notification outbox.
 - Added monitor status, event history and protected run-once APIs.
 - Confirmed that no live Zerodha order method is called by the monitor.
+
+## CR-2026-09-26-078 — v7.8 Autonomous Paper Trading Loop
+
+| Field | Record |
+|---|---|
+| Date | 2026-09-26 |
+| Version | 7.8.0-paper-rc1 |
+| Category | Paper automation, persistence, operational safety |
+| Problem / objective | Produce qualified paper calls and journal entries automatically instead of requiring manual preview, approval and execution requests |
+| Files and modules changed | `paper_auto_trader.py`, `live_paper_bridge_routes.py`, `store.py`, migration 008, application lifecycle, configuration, deployment installer, tests and release documentation |
+| Implementation summary | Added an opt-in NSE-session worker that records live intelligence, evaluates each three-minute market-data bucket once, applies A/A+ and risk gates, and opens only simulated paper positions |
+| Trading logic impact | Automates the existing paper path; does not relax the intelligence or risk gates |
+| Zerodha compatibility impact | Read-only option-chain use; no broker order method is added or called |
+| API / database compatibility impact | Additive endpoints and `paper_automation_runs` table; existing APIs remain compatible |
+| Configuration changes | New `PAPER_AUTO_TRADER_*` variables; shared production paths documented; `LIVE_ORDERS_ENABLED=false` remains mandatory |
+| Tests executed | Python compile, focused offline suite, complete offline-compatible suite, Git whitespace check, shell syntax checks |
+| Test results | Focused 20/20 passed; complete offline-compatible run 218 passed with 7 environment/shim limitations (real pytest/FastAPI/httpx unavailable locally) |
+| AWS deployment notes | Deploy disabled, run real 246+ suite, verify status, then explicitly enable the paper worker; candidate port 8001 forces the worker off; runtime directories are excluded before shared symlinks are created |
+| Rollback procedure | Point `/opt/vstradingai/current` to the previous release and restart `vstradingai-api.service`; migration 008 is additive |
+| Known limitations | Live-session validation and sufficient OI/PCR samples are still required; ₹10,000 paper capital may legitimately block a full Nifty lot under the configured risk cap |
+| Pending follow-up | Monday live-session certification, mobile dashboard presentation and notification delivery |
+| Approver / verifier | Pending AWS verification |
 
 # VSTradingAI Change & Improvement Register
 
@@ -208,3 +290,109 @@ Approver / verifier:
 - Multi-session certification evidence gate.
 - Certification report notification outbox integration.
 - Four new backend tests; full suite 137 passed.
+
+## V7.3.1 — Fail-Closed Input Integrity
+
+- **Date:** 2026-09-15
+- **Reason:** Remove silent timestamp substitution and prevent unverifiable option quotes or reset volume counters from contaminating execution evidence.
+- **Modules:** `live_market_stream.py`, `data_quality_gate.py`, and focused regression tests.
+- **Safety:** Broker ticks without a valid exchange timestamp or positive finite price are rejected; missing option quote timestamps block execution; cumulative-volume resets are rebased without inflating candle volume.
+- **Trading impact:** No strategy or broker-write behavior added. Mock mode and disabled live orders remain the defaults.
+- **Validation:** 9 focused integrity tests and 180 full backend tests passed; frontend production build passed; npm audit found 0 vulnerabilities; `git diff --check` passed.
+- **Rollback:** Revert this single additive checkpoint; no schema or data migration is required.
+
+## V7.3.2 — Finalized 3-Minute Candle Integrity
+
+- **Date:** 2026-09-15
+- **Reason:** Prevent polling timestamps, duplicate samples, or delayed samples from altering decision candles.
+- **Modules:** `market_data_service.py` and focused market-data regression tests.
+- **Safety:** Exchange timestamps are mandatory and timezone-aware; missing, invalid, or future timestamps activate `NO_TRADE`; duplicate and out-of-order samples cannot mutate OHLC; decision consumers receive finalized 3-minute candles only.
+- **Trading impact:** No strategy thresholds or broker-write behavior changed. Mock mode and disabled live orders remain the defaults.
+- **Compatibility:** Existing candle fields remain available; the additive `finalized` field explicitly distinguishes closed bars, and supervisor snapshots intentionally exclude the forming bar.
+- **Validation:** 16 focused integrity tests and 184 full backend tests passed; frontend production build passed; npm audit found 0 vulnerabilities; `git diff --check` passed.
+- **Rollback:** Revert this single checkpoint; no schema or persisted-data migration is required.
+
+## V7.3.3 — Contract Master and Expiry Integrity
+
+- **Date:** 2026-09-15
+- **Reason:** Prevent stale, ambiguous, or mismatched option-contract metadata from reaching the execution adapter.
+- **Modules:** `data_sources/zerodha_client.py`, `data_quality_gate.py`, and focused contract-quality regression tests.
+- **Safety:** Every proposed option order must resolve to exactly one live-chain contract with matching active expiry, NFO option venue, CE/PE type, positive instrument token, strike, tick size, and broker-reported lot size. Missing or inconsistent metadata fails closed.
+- **Trading impact:** No strategy thresholds or broker-write behavior changed. Mock mode and disabled live orders remain the defaults.
+- **Compatibility:** Zerodha option-chain responses gain additive contract-master fields; existing API fields remain unchanged.
+- **Validation:** 9 focused contract-quality tests and 188 full backend tests passed; frontend production build passed; npm audit found 0 vulnerabilities; `git diff --check` passed.
+- **Rollback:** Revert this single checkpoint; no schema or persisted-data migration is required.
+
+## V7.4.0 — Broker/Local Position Reconciliation
+
+- **Date:** 2026-09-15
+- **Reason:** Detect hidden or mismatched NIFTY option exposure before permitting another entry.
+- **Modules:** `execution_spine.py`, protected execution route, and focused reconciliation regression tests.
+- **Safety:** Reconciliation reads Zerodha's current net positions and compares them with today's durable local fills. Unexpected symbols or quantity differences latch the persistent kill switch and create an audit event; no corrective broker order is sent automatically.
+- **Trading impact:** No strategy, signal, or broker-write behavior changed. Mock mode and disabled live orders remain the defaults.
+- **Compatibility:** Adds the admin-protected `POST /api/execution/reconcile-positions` endpoint; existing APIs remain unchanged.
+- **Validation:** 8 focused execution/reconciliation tests and 192 full backend tests passed; frontend production build passed; npm audit found 0 vulnerabilities; `git diff --check` passed.
+- **Rollback:** Revert this additive checkpoint; no schema or persisted-data migration is required.
+
+## V7.4.1 — End-of-Day Execution Session Seal
+
+- **Date:** 2026-09-16
+- **Reason:** Make daily shutdown auditable and prevent unresolved exposure from silently crossing the session boundary.
+- **Modules:** execution configuration, execution spine, EOD session seal service, protected execution route, and focused regression tests.
+- **Safety:** New entries are blocked at the configured cutoff (default 15:15 IST). After the configured seal time (default 15:25 IST), sealing requires no unresolved execution exposure and no open local position. Live mode additionally requires an exact broker/local position reconciliation. Any failure latches the persistent kill switch; the seal never sends an automatic broker order.
+- **Trading impact:** No strategy, signal, or broker-write behavior changed. Mock mode and disabled live orders remain the defaults.
+- **Compatibility:** Adds `EXECUTION_ENTRY_CUTOFF_TIME`, `EXECUTION_EOD_SEAL_TIME`, and the admin-protected `POST /api/execution/eod-seal` endpoint.
+- **Validation:** 9 focused execution/EOD tests and 197 full backend tests passed; frontend production build passed; npm audit found 0 vulnerabilities; `git diff --check` passed.
+- **Rollback:** Revert this additive checkpoint; no schema or persisted-data migration is required.
+
+## V7.4.2 — Mandatory Position-Protection Evidence
+
+- **Date:** 2026-09-16
+- **Reason:** Ensure every eligible live entry has a deterministic, immutable exit policy before broker submission.
+- **Modules:** position-protection gate, execution readiness/spine integration, and focused regression tests.
+- **Safety:** Approved setups must contain a valid entry range, hard stop below entry, ordered targets, configured minimum risk/reward, and invalidation rationale. Order payloads cannot override or widen the approved stop; averaging down is explicitly prohibited in the persisted policy.
+- **Trading impact:** No automatic exit or broker-write behavior was added. Human confirmation, NIFTY options BUY-only, one-position limits, mock mode, and disabled live orders remain intact.
+- **Compatibility:** Protection evidence is added to execution quality snapshots; existing endpoints remain unchanged.
+- **Validation:** 9 focused protection/execution tests and 202 full backend tests passed; frontend production build passed; npm audit found 0 vulnerabilities; `git diff --check` passed.
+- **Rollback:** Revert this additive checkpoint; no schema or persisted-data migration is required.
+
+## V7.5.0 — Deterministic Decision Evidence Certificate
+
+- **Date:** 2026-09-16
+- **Reason:** Make every strategy decision reproducible and detect evidence mutation before live confirmation.
+- **Modules:** decision-evidence certificate service, pipeline response model, execution readiness gate, and tamper/replay regression tests.
+- **Safety:** Each normal decision is bound to one finalized, timezone-aware, exchange-aligned 3-minute OHLCV bar and a canonical feature hash. Live confirmation rejects missing or altered certificates. Forming or misaligned bars cannot be certified.
+- **Trading impact:** No strategy thresholds or broker-write behavior changed. Default `NO_TRADE`, human confirmation, mock mode and disabled live orders remain intact.
+- **Compatibility:** Adds `decision_evidence` to live decision payloads and execution quality snapshots; existing fields remain unchanged.
+- **Validation:** 21 focused evidence/pipeline/execution tests and 206 full backend tests passed; frontend production build passed; npm audit found 0 vulnerabilities; `git diff --check` passed.
+- **Rollback:** Revert this additive checkpoint; no database migration is required.
+
+## V7.6.0 — Overfitting-Resistant Research Certification
+
+- **Date:** 2026-09-16
+- **Reason:** Prevent ordinary chronological splits and the best result from repeated trials from being mistaken for robust strategy evidence.
+- **Modules:** `strategy_validation.py`, Strategy Lab request/response integration, research documentation, and focused regression tests.
+- **Safety:** Adds purge/embargo gaps, Probabilistic Sharpe, Deflated Sharpe, complete-trial accounting, and fail-closed evidence states. Results remain research-only and never promote a strategy automatically.
+- **Trading impact:** No live signal, threshold, broker, or execution behavior changed. Mock mode and disabled live orders remain the defaults; AWS is unchanged.
+- **Compatibility:** Existing Strategy Lab fields remain valid. `advanced_validation`, `research_trials`, purged splits, and research certification are additive.
+- **Validation:** 12 focused Strategy Lab tests and 227 full backend tests passed; frontend production build passed; npm audit found 0 vulnerabilities; runtime safety and `git diff --check` passed.
+- **Rollback:** Revert this additive checkpoint; no schema or persisted-data migration is required.
+# 7.8.4 adversarial audit (2026-09-26)
+
+| Files/modules | Reason and implementation | Compatibility | Verification | Deploy / rollback |
+|---|---|---|---|---|
+| `paper_auto_trader.py`, `market_calendar_service.py` | Require an aligned completed 3-minute candle; use its start as idempotency key; connect and strictly validate managed holidays | Existing callers retained | finalized/unfinalized, duplicate, holiday and corruption tests | deploy normally; rollback release symlink |
+| `live_paper_bridge.py`, `config.py`, `.env.example` | Add two-sided quote, maximum spread, minimum OI/volume gates and strategy/input snapshots | New settings have conservative defaults | bridge and E2E tests | disable auto trader to roll back behavior |
+| `store.py`, `paper_trade_management.py`, `paper_journal.py`, migration `009` | Persist reference/slippage/lowest price and report MFE/MAE | additive migration | lifecycle/journal/restart tests | restore DB backup only with schema review |
+| dependency manifests | Upgrade direct vulnerable/outdated dependencies | FastAPI/pytest behavior tested | full backend, frontend build, audits | reinstall previous lockfile in previous release |
+| release hygiene | Exclude runtime DB/log data and obsolete backup source copies | no runtime API impact | secret/file scan and ZIP listing | quarantined originals retained outside archive |
+
+See `AUDIT_REPORT_7.8.4.md`, `TEST_REPORT_7.8.4.md`, and `DEPLOYMENT_7.8.4.md` for limits and exact evidence.
+# 7.9.0 paper certification (2026-09-26)
+
+| Files/modules | Improvement | Tests / rollback |
+|---|---|---|
+| `paper_decision_orchestrator.py`, `paper_auto_trader.py`, `pipeline.py` | Require the complete versioned multi-agent decision to agree with the OI/PCR candidate; independently enforce finalized candles | V7.9 orchestrator/pipeline tests; disable paper automation or roll back release symlink |
+| `paper_costs.py`, `paper_trade_management.py`, `paper_journal.py`, `config.py` | Itemized and configurable India-options paper cost evidence | deterministic cost and lifecycle tests; restore previous release for old model |
+| `PaperAutomationPage.tsx`, API types/status | Show full-pipeline requirement, decision/grade and cost-model version | TypeScript/Vite build |
+| readiness, env template and docs | Block readiness when full pipeline is bypassed or WebSocket is requested | readiness tests and configuration validation |

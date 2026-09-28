@@ -14,6 +14,10 @@ data/*.db
 data/*.sqlite
 data/*.sqlite3
 data/*.jsonl
+backend/data/*.db
+backend/data/*.sqlite
+backend/data/*.sqlite3
+backend/data/*.jsonl
 
 *.pem
 *.key
@@ -34,3 +38,4 @@ request_token
 
 # Generated market-data runtime files
 backend/data/tick_bridge.jsonl
+backend/data/market_data_state.json

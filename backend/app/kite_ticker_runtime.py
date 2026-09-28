@@ -129,7 +129,7 @@ class KiteTickerRuntime:
     def _default_ingest(tick: dict[str, Any]) -> dict[str, Any]:
         from app import store
         from app.live_market_stream import get_live_market_stream
-        from app.paper_trade_management import evaluate
+        from app.paper_trade_management import record_monitor_outcome
         from app.tick_bridge import get_tick_bridge
 
         stream_result = get_live_market_stream().ingest(tick)
@@ -138,16 +138,8 @@ class KiteTickerRuntime:
         if str(tick.get("option_type") or "").upper() not in {"CE", "PE"}:
             return stream_result
 
-        def monitor(trade: dict, price: float):
-            result = evaluate(trade, price)
-            detail = ",".join(result.get("actions") or []) or result.get("reason")
-            store.record_paper_monitor_event(trade["id"], price, result["action"], detail)
-            if result["action"] == "CLOSED" and result.get("net_pnl") is not None:
-                store.record_trade_result(result["net_pnl"], "B")
-            return result
-
         return get_tick_bridge(settings.tick_bridge_history_path).ingest(
-            tick, open_trade=store.get_open_paper_trade(), monitor=monitor
+            tick, open_trade=store.get_open_paper_trade(), monitor=record_monitor_outcome
         )
 
     def _connect(self) -> None:
@@ -271,12 +263,16 @@ class KiteTickerRuntime:
         with self._lock:
             if not self._state.running:
                 return self.status()
-            if self._state.market_open and self._state.connected and self._state.last_callback_at and self._metadata:
-                last = datetime.fromisoformat(self._state.last_callback_at.replace("Z", "+00:00"))
-                if (now - last.astimezone(timezone.utc)).total_seconds() > self.heartbeat_timeout_sec:
-                    close_ticker = self._ticker
-                    self._ticker = None
-                    self._schedule_reconnect("heartbeat timeout")
+            if self._state.market_open and self._state.connected and self._metadata:
+                # Tick freshness is the authoritative liveness signal. Callback
+                # activity can continue while market data itself is silent.
+                reference = self._state.last_tick_at or self._state.last_callback_at or self._state.started_at
+                if reference:
+                    last = datetime.fromisoformat(reference.replace("Z", "+00:00"))
+                    if (now - last.astimezone(timezone.utc)).total_seconds() > self.heartbeat_timeout_sec:
+                        close_ticker = self._ticker
+                        self._ticker = None
+                        self._schedule_reconnect("market tick heartbeat timeout")
             if not self._state.connected and self._state.next_reconnect_at:
                 due = datetime.fromisoformat(self._state.next_reconnect_at.replace("Z", "+00:00"))
                 reconnect = now >= due.astimezone(timezone.utc)
@@ -301,11 +297,16 @@ class KiteTickerRuntime:
         with self._lock:
             payload = asdict(self._state)
         age = None
+        tick_age = None
         if payload.get("last_callback_at"):
             last = datetime.fromisoformat(payload["last_callback_at"].replace("Z", "+00:00"))
             age = max(0.0, (now - last.astimezone(timezone.utc)).total_seconds())
+        if payload.get("last_tick_at"):
+            last_tick = datetime.fromisoformat(payload["last_tick_at"].replace("Z", "+00:00"))
+            tick_age = max(0.0, (now - last_tick.astimezone(timezone.utc)).total_seconds())
         payload.update({
             "heartbeat_age_sec": round(age, 2) if age is not None else None,
+            "tick_age_sec": round(tick_age, 2) if tick_age is not None else None,
             "heartbeat_timeout_sec": self.heartbeat_timeout_sec,
             "subscription_count": payload["metadata_count"],
             "execution_mode": "MARKET_DATA_ONLY",

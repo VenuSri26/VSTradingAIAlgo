@@ -39,10 +39,16 @@ async def lifespan(app: FastAPI):
     daily_digest_scheduler_task = None
     live_session_recorder_task = None
     certification_eod_task = None
+    paper_auto_trader_task = None
+    pre_market_report_task = None
+    post_market_report_task = None
     from app.routes import get_data_source
     if settings.paper_auto_monitor_enabled:
         from app.paper_monitor import run_monitor_loop
         monitor_task = asyncio.create_task(run_monitor_loop(get_data_source))
+    if settings.paper_auto_trader_enabled:
+        from app.paper_auto_trader import run_loop as run_paper_auto_trader_loop
+        paper_auto_trader_task = asyncio.create_task(run_paper_auto_trader_loop(get_data_source))
     if settings.market_data_supervisor_enabled:
         from app.market_data_service import get_supervisor
         supervisor = get_supervisor(
@@ -77,10 +83,14 @@ async def lifespan(app: FastAPI):
     if settings.live_session_cert_eod_enabled:
         from app.live_session_certification_routes import get_certification_eod_scheduler
         certification_eod_task = asyncio.create_task(get_certification_eod_scheduler().run_loop())
+    if settings.trading_report_scheduler_enabled:
+        from app.trading_report_routes import pre_market_scheduler, post_market_scheduler
+        pre_market_report_task = asyncio.create_task(pre_market_scheduler.run_loop())
+        post_market_report_task = asyncio.create_task(post_market_scheduler.run_loop())
     try:
         yield
     finally:
-        for task in (monitor_task, market_data_task, kite_runtime_task, runtime_maintenance_task, notification_scheduler_task, daily_digest_scheduler_task, live_session_recorder_task, certification_eod_task):
+        for task in (monitor_task, paper_auto_trader_task, market_data_task, kite_runtime_task, runtime_maintenance_task, notification_scheduler_task, daily_digest_scheduler_task, live_session_recorder_task, certification_eod_task, pre_market_report_task, post_market_report_task):
             if task is not None:
                 task.cancel()
                 try:
@@ -166,8 +176,22 @@ from app.live_session_certification_routes import router as live_session_certifi
 app.include_router(live_session_certification_router)
 from app.live_market_routes import router as live_market_router  # noqa: E402
 app.include_router(live_market_router)
+from app.market_data_consensus_routes import router as market_data_consensus_router  # noqa: E402
+app.include_router(market_data_consensus_router)
+from app.trading_report_routes import router as trading_report_router  # noqa: E402
+app.include_router(trading_report_router)
+from app.setup_routes import router as setup_router  # noqa: E402
+app.include_router(setup_router)
 
 
 @app.get("/healthz")
 def healthz():
-    return {"status": "ok", "trading_mode": settings.trading_mode, **version_info()}
+    return {
+        "status": "ok",
+        "market_data_mode": settings.trading_mode.upper(),
+        "execution_mode": "PAPER_ONLY" if not settings.live_orders_enabled else "LIVE_BROKER",
+        "live_orders_enabled": settings.live_orders_enabled,
+        # Kept for API compatibility; consumers should use the explicit fields above.
+        "trading_mode": settings.trading_mode,
+        **version_info(),
+    }

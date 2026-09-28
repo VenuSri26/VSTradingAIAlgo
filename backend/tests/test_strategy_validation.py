@@ -1,5 +1,9 @@
 import pandas as pd
-from app.strategy_validation import ReplayConfig, ReplaySignal, replay_signals, summarize_trades, walk_forward_splits
+from app.strategy_validation import (
+    ReplayConfig, ReplaySignal, certify_research_trials, deflated_sharpe_ratio,
+    probabilistic_sharpe_ratio, purged_walk_forward_splits, replay_signals,
+    summarize_trades, walk_forward_splits,
+)
 
 
 def candles(rows):
@@ -52,3 +56,45 @@ def test_walk_forward_splits_are_chronological():
         {"train_start":0,"train_end":60,"test_start":60,"test_end":80},
         {"train_start":0,"train_end":80,"test_start":80,"test_end":100},
     ]
+
+
+def test_purged_walk_forward_excludes_boundaries_and_prior_embargo():
+    splits = purged_walk_forward_splits(24, 10, 4, 4, purge_size=2, embargo_size=2)
+    assert splits[0]["train_indices"] == list(range(8))
+    assert splits[0]["purged_indices"] == [8, 9]
+    assert splits[0]["test_indices"] == [10, 11, 12, 13]
+    assert splits[0]["embargoed_indices"] == [14, 15]
+    assert set(splits[0]["embargoed_indices"]).isdisjoint(splits[1]["test_indices"])
+    assert 14 not in splits[1]["train_indices"] and 15 not in splits[1]["train_indices"]
+
+
+def test_probabilistic_and_deflated_sharpe_penalize_multiple_trials():
+    selected = [0.01, 0.02, -0.005, 0.015, 0.01] * 8
+    psr = probabilistic_sharpe_ratio(selected)
+    dsr = deflated_sharpe_ratio(selected, [0.1, 0.2, 0.3, 0.4, 0.5])
+    assert 0.5 < psr <= 1
+    assert 0 <= dsr["deflated_sharpe_probability"] < psr
+    assert dsr["trial_count"] == 5
+
+
+def test_research_trial_certification_fails_closed_for_incomplete_history():
+    report = certify_research_trials(
+        [{"name": "a", "returns": [0.1, -0.1]}, {"name": "b", "returns": [0.2, -0.1]}],
+        "a", min_observations=10,
+    )
+    assert report["status"] == "INSUFFICIENT_EVIDENCE"
+    assert report["blockers"] == ["MINIMUM_OBSERVATIONS_NOT_MET"]
+
+
+def test_research_trial_certification_can_approve_only_research_candidate():
+    strong = [0.02, 0.015, 0.01, -0.002, 0.018] * 8
+    weak = [0.001, -0.002, 0.0015, -0.001, 0.0005] * 8
+    flat = [0.002, -0.002, 0.002, -0.002, 0.001] * 8
+    report = certify_research_trials([
+        {"name": "strong", "returns": strong},
+        {"name": "weak", "returns": weak},
+        {"name": "flat", "returns": flat},
+    ], "strong", min_observations=30, min_probability=0.9)
+    assert report["status"] == "CERTIFIED_RESEARCH_CANDIDATE"
+    assert report["blockers"] == []
+    assert report["trial_count"] == 3

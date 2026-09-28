@@ -30,8 +30,13 @@ class Settings:
     require_https: bool = os.getenv("REQUIRE_HTTPS", "false").lower() in ("1", "true", "yes", "on")
     live_orders_enabled: bool = os.getenv("LIVE_ORDERS_ENABLED", "false").lower() in ("1", "true", "yes", "on")
     execution_preview_ttl_sec: int = int(os.getenv("EXECUTION_PREVIEW_TTL_SEC", "120"))
+    execution_max_spread_pct: float = float(os.getenv("EXECUTION_MAX_SPREAD_PCT", "3.0"))
+    execution_entry_cutoff_time: str = os.getenv("EXECUTION_ENTRY_CUTOFF_TIME", "15:15")
+    execution_eod_seal_time: str = os.getenv("EXECUTION_EOD_SEAL_TIME", "15:25")
     app_timezone: str = os.getenv("APP_TIMEZONE", "Asia/Kolkata")
-    nifty_lot_size: int = int(os.getenv("NIFTY_LOT_SIZE", "75"))
+    # NSE revised NIFTY market lot from 75 to 65. Live execution also validates
+    # quantity against the broker instrument master, which is authoritative.
+    nifty_lot_size: int = int(os.getenv("NIFTY_LOT_SIZE", "65"))
 
     max_trades_per_day: int = int(os.getenv("MAX_TRADES_PER_DAY", "3"))
     daily_loss_limit: float = float(os.getenv("DAILY_LOSS_LIMIT", "5000"))
@@ -45,18 +50,58 @@ class Settings:
     max_risk_per_trade_pct: float = float(os.getenv("MAX_RISK_PER_TRADE_PCT", "2"))
     paper_slippage_rupees: float = float(os.getenv("PAPER_SLIPPAGE_RUPEES", "0.5"))
     paper_cost_rate: float = float(os.getenv("PAPER_COST_RATE", "0.0015"))
+    paper_brokerage_per_order: float = float(os.getenv("PAPER_BROKERAGE_PER_ORDER", "20"))
+    paper_brokerage_rate: float = float(os.getenv("PAPER_BROKERAGE_RATE", "0.0003"))
+    paper_stt_sell_rate: float = float(os.getenv("PAPER_STT_SELL_RATE", "0.001"))
+    paper_exchange_charge_rate: float = float(os.getenv("PAPER_EXCHANGE_CHARGE_RATE", "0.0003503"))
+    paper_sebi_charge_rate: float = float(os.getenv("PAPER_SEBI_CHARGE_RATE", "0.000001"))
+    paper_stamp_duty_buy_rate: float = float(os.getenv("PAPER_STAMP_DUTY_BUY_RATE", "0.00003"))
+    paper_gst_rate: float = float(os.getenv("PAPER_GST_RATE", "0.18"))
+    paper_profit_withdrawal_threshold: float = float(os.getenv("PAPER_PROFIT_WITHDRAWAL_THRESHOLD", "100000"))
+    paper_default_stop_loss_pct: float = float(os.getenv("PAPER_DEFAULT_STOP_LOSS_PCT", "20"))
+    paper_min_option_oi: int = int(os.getenv("PAPER_MIN_OPTION_OI", "100"))
+    paper_min_option_volume: int = int(os.getenv("PAPER_MIN_OPTION_VOLUME", "1"))
+    paper_max_option_spread_pct: float = float(os.getenv("PAPER_MAX_OPTION_SPREAD_PCT", "5"))
     min_agent_coverage: float = float(os.getenv("MIN_AGENT_COVERAGE", "0.70"))
     max_agent_disagreement: float = float(os.getenv("MAX_AGENT_DISAGREEMENT", "0.45"))
 
     # Restart-safe automated paper monitoring. This never places broker orders.
     paper_auto_monitor_enabled: bool = os.getenv("PAPER_AUTO_MONITOR_ENABLED", "true").lower() in ("1", "true", "yes", "on")
     paper_monitor_interval_sec: float = float(os.getenv("PAPER_MONITOR_INTERVAL_SEC", "5"))
+    paper_monitor_max_age_sec: float = float(os.getenv("PAPER_MONITOR_MAX_AGE_SEC", "30"))
     paper_eod_exit_time: str = os.getenv("PAPER_EOD_EXIT_TIME", "15:20")
     paper_notification_path: str = os.getenv("PAPER_NOTIFICATION_PATH", "./data/paper_notifications.jsonl")
+
+    # v7.8 autonomous PAPER-only entry loop. This feature can create simulated
+    # trades, but it never calls a broker order API. It is opt-in so a release
+    # can be deployed and inspected before automation is armed.
+    paper_auto_trader_enabled: bool = os.getenv("PAPER_AUTO_TRADER_ENABLED", "false").lower() in ("1", "true", "yes", "on")
+    paper_auto_trader_interval_sec: float = float(os.getenv("PAPER_AUTO_TRADER_INTERVAL_SEC", "15"))
+    paper_auto_trader_min_score: int = int(os.getenv("PAPER_AUTO_TRADER_MIN_SCORE", "85"))
+    paper_auto_trader_grades: str = os.getenv("PAPER_AUTO_TRADER_GRADES", "A,A+")
+    paper_auto_trader_atm_range: int = int(os.getenv("PAPER_AUTO_TRADER_ATM_RANGE", "8"))
+    paper_auto_trader_max_age_sec: int = int(os.getenv("PAPER_AUTO_TRADER_MAX_AGE_SEC", "30"))
+    paper_require_full_pipeline: bool = os.getenv("PAPER_REQUIRE_FULL_PIPELINE", "true").lower() in ("1", "true", "yes", "on")
 
     market_data_supervisor_enabled: bool = os.getenv("MARKET_DATA_SUPERVISOR_ENABLED", "true").lower() in ("1", "true", "yes", "on")
     market_data_poll_interval_sec: float = float(os.getenv("MARKET_DATA_POLL_INTERVAL_SEC", "3"))
     market_data_state_path: str = os.getenv("MARKET_DATA_STATE_PATH", "./data/market_data_state.json")
+    market_data_consensus_required: bool = os.getenv("MARKET_DATA_CONSENSUS_REQUIRED", "false").lower() in ("1", "true", "yes", "on")
+    market_data_consensus_min_sources: int = int(os.getenv("MARKET_DATA_CONSENSUS_MIN_SOURCES", "2"))
+    market_data_consensus_max_deviation_pct: float = float(os.getenv("MARKET_DATA_CONSENSUS_MAX_DEVIATION_PCT", "0.15"))
+    secondary_quote_replay_path: str = os.getenv("SECONDARY_QUOTE_REPLAY_PATH", "./data/secondary_quotes.jsonl")
+    consensus_shadow_history_path: str = os.getenv("CONSENSUS_SHADOW_HISTORY_PATH", "./data/consensus_shadow.jsonl")
+    upstox_market_data_enabled: bool = os.getenv("UPSTOX_MARKET_DATA_ENABLED", "false").lower() in ("1", "true", "yes", "on")
+    upstox_access_token: str | None = os.getenv("UPSTOX_ACCESS_TOKEN")
+    upstox_nifty_instrument_key: str = os.getenv("UPSTOX_NIFTY_INSTRUMENT_KEY", "NSE_INDEX|Nifty 50")
+    upstox_quote_timeout_sec: float = float(os.getenv("UPSTOX_QUOTE_TIMEOUT_SEC", "3"))
+    upstox_quote_poll_interval_sec: float = float(os.getenv("UPSTOX_QUOTE_POLL_INTERVAL_SEC", "3"))
+    consensus_cert_min_samples: int = int(os.getenv("CONSENSUS_CERT_MIN_SAMPLES", "500"))
+    consensus_cert_min_sessions: int = int(os.getenv("CONSENSUS_CERT_MIN_SESSIONS", "3"))
+    consensus_cert_min_verified_ratio: float = float(os.getenv("CONSENSUS_CERT_MIN_VERIFIED_RATIO", "0.98"))
+    consensus_cert_max_conflict_ratio: float = float(os.getenv("CONSENSUS_CERT_MAX_CONFLICT_RATIO", "0.005"))
+    consensus_cert_max_stale_ratio: float = float(os.getenv("CONSENSUS_CERT_MAX_STALE_RATIO", "0.01"))
+    consensus_cert_max_p95_deviation_pct: float = float(os.getenv("CONSENSUS_CERT_MAX_P95_DEVIATION_PCT", "0.08"))
     market_open_time: str = os.getenv("MARKET_OPEN_TIME", "09:15")
     market_close_time: str = os.getenv("MARKET_CLOSE_TIME", "15:30")
     market_holidays: str = os.getenv("MARKET_HOLIDAYS", "")
@@ -109,6 +154,11 @@ class Settings:
     daily_digest_time: str = os.getenv("DAILY_DIGEST_TIME", "16:00")
     daily_digest_poll_interval_sec: float = float(os.getenv("DAILY_DIGEST_POLL_INTERVAL_SEC", "60"))
     daily_digest_enqueue: bool = os.getenv("DAILY_DIGEST_ENQUEUE", "true").lower() in ("1", "true", "yes", "on")
+    trading_report_path: str = os.getenv("TRADING_REPORT_PATH", "./data/trading_reports.jsonl")
+    trading_report_scheduler_enabled: bool = os.getenv("TRADING_REPORT_SCHEDULER_ENABLED", "true").lower() in ("1", "true", "yes", "on")
+    pre_market_report_time: str = os.getenv("PRE_MARKET_REPORT_TIME", "09:00")
+    post_market_report_time: str = os.getenv("POST_MARKET_REPORT_TIME", "15:40")
+    trading_report_poll_interval_sec: float = float(os.getenv("TRADING_REPORT_POLL_INTERVAL_SEC", "60"))
     live_session_validation_path: str = os.getenv("LIVE_SESSION_VALIDATION_PATH", "./data/live_session_validation.jsonl")
     live_session_min_samples: int = int(os.getenv("LIVE_SESSION_MIN_SAMPLES", "20"))
     live_session_min_ready_ratio: float = float(os.getenv("LIVE_SESSION_MIN_READY_RATIO", "0.95"))
@@ -170,18 +220,70 @@ def validate(settings_obj: Settings = settings) -> list[str]:
 
     if settings_obj.max_trades_per_day < 1:
         problems.append("MAX_TRADES_PER_DAY must be >= 1")
+    if settings_obj.paper_auto_trader_enabled and settings_obj.live_orders_enabled:
+        problems.append("PAPER_AUTO_TRADER_ENABLED requires LIVE_ORDERS_ENABLED=false")
+    if settings_obj.paper_auto_trader_interval_sec < 3:
+        problems.append("PAPER_AUTO_TRADER_INTERVAL_SEC must be >= 3")
+    if not 1 <= settings_obj.paper_auto_trader_min_score <= 100:
+        problems.append("PAPER_AUTO_TRADER_MIN_SCORE must be between 1 and 100")
+    allowed_paper_grades = {
+        grade.strip() for grade in settings_obj.paper_auto_trader_grades.split(",") if grade.strip()
+    }
+    if not allowed_paper_grades or not allowed_paper_grades.issubset({"A", "A+"}):
+        problems.append("PAPER_AUTO_TRADER_GRADES may contain only A and A+")
+    if settings_obj.paper_monitor_interval_sec < 1:
+        problems.append("PAPER_MONITOR_INTERVAL_SEC must be >= 1")
+    if settings_obj.execution_preview_ttl_sec < 30:
+        problems.append("EXECUTION_PREVIEW_TTL_SEC must be >= 30")
+    for name, value in (
+        ("EXECUTION_ENTRY_CUTOFF_TIME", settings_obj.execution_entry_cutoff_time),
+        ("EXECUTION_EOD_SEAL_TIME", settings_obj.execution_eod_seal_time),
+    ):
+        try:
+            hh, mm = [int(x) for x in value.split(":", 1)]
+            if not (0 <= hh <= 23 and 0 <= mm <= 59):
+                raise ValueError
+        except (ValueError, TypeError):
+            problems.append(f"{name} must be HH:MM")
+    if not 0.1 <= settings_obj.execution_max_spread_pct <= 20:
+        problems.append("EXECUTION_MAX_SPREAD_PCT must be between 0.1 and 20")
     if settings_obj.daily_loss_limit <= 0:
         problems.append("DAILY_LOSS_LIMIT must be > 0")
     if settings_obj.max_consecutive_losses < 1:
         problems.append("MAX_CONSECUTIVE_LOSSES must be >= 1")
     if settings_obj.risk_cooldown_minutes < 0:
         problems.append("RISK_COOLDOWN_MINUTES must be >= 0")
+    if settings_obj.paper_monitor_max_age_sec <= 0:
+        problems.append("PAPER_MONITOR_MAX_AGE_SEC must be > 0")
     if not 1 <= settings_obj.max_capital_utilization_pct <= 100:
         problems.append("MAX_CAPITAL_UTILIZATION_PCT must be between 1 and 100")
     if settings_obj.poll_interval_sec < 1:
         problems.append("POLL_INTERVAL_SEC must be >= 1")
     if settings_obj.market_data_poll_interval_sec < 1:
         problems.append("MARKET_DATA_POLL_INTERVAL_SEC must be >= 1")
+    if settings_obj.market_data_consensus_min_sources < 2:
+        problems.append("MARKET_DATA_CONSENSUS_MIN_SOURCES must be >= 2")
+    if not 0 < settings_obj.market_data_consensus_max_deviation_pct <= 5:
+        problems.append("MARKET_DATA_CONSENSUS_MAX_DEVIATION_PCT must be between 0 and 5")
+    if settings_obj.upstox_market_data_enabled and not settings_obj.upstox_access_token:
+        problems.append("UPSTOX_ACCESS_TOKEN is required when UPSTOX_MARKET_DATA_ENABLED=true")
+    if not 1 <= settings_obj.upstox_quote_timeout_sec <= 30:
+        problems.append("UPSTOX_QUOTE_TIMEOUT_SEC must be between 1 and 30")
+    if settings_obj.upstox_quote_poll_interval_sec < 1:
+        problems.append("UPSTOX_QUOTE_POLL_INTERVAL_SEC must be >= 1")
+    if settings_obj.consensus_cert_min_samples < 10:
+        problems.append("CONSENSUS_CERT_MIN_SAMPLES must be >= 10")
+    if settings_obj.consensus_cert_min_sessions < 1:
+        problems.append("CONSENSUS_CERT_MIN_SESSIONS must be >= 1")
+    for name, value in (
+        ("CONSENSUS_CERT_MIN_VERIFIED_RATIO", settings_obj.consensus_cert_min_verified_ratio),
+        ("CONSENSUS_CERT_MAX_CONFLICT_RATIO", settings_obj.consensus_cert_max_conflict_ratio),
+        ("CONSENSUS_CERT_MAX_STALE_RATIO", settings_obj.consensus_cert_max_stale_ratio),
+    ):
+        if not 0 <= value <= 1:
+            problems.append(f"{name} must be between 0 and 1")
+    if not 0 < settings_obj.consensus_cert_max_p95_deviation_pct <= 5:
+        problems.append("CONSENSUS_CERT_MAX_P95_DEVIATION_PCT must be between 0 and 5")
     if settings_obj.instrument_sync_interval_hours < 1:
         problems.append("INSTRUMENT_SYNC_INTERVAL_HOURS must be >= 1")
     if settings_obj.websocket_batch_size < 1:
@@ -208,6 +310,18 @@ def validate(settings_obj: Settings = settings) -> list[str]:
         problems.append("NOTIFICATION_RETRY_MAX_SEC must be >= NOTIFICATION_RETRY_BASE_SEC")
     if settings_obj.daily_digest_poll_interval_sec < 10:
         problems.append("DAILY_DIGEST_POLL_INTERVAL_SEC must be >= 10")
+    if settings_obj.trading_report_poll_interval_sec < 10:
+        problems.append("TRADING_REPORT_POLL_INTERVAL_SEC must be >= 10")
+    for variable, value in (
+        ("PRE_MARKET_REPORT_TIME", settings_obj.pre_market_report_time),
+        ("POST_MARKET_REPORT_TIME", settings_obj.post_market_report_time),
+    ):
+        try:
+            hh, mm = [int(x) for x in value.split(":", 1)]
+            if not (0 <= hh <= 23 and 0 <= mm <= 59):
+                raise ValueError
+        except (TypeError, ValueError):
+            problems.append(f"{variable} must use HH:MM 24-hour format")
     try:
         hh, mm = [int(x) for x in settings_obj.daily_digest_time.split(":", 1)]
         if not (0 <= hh <= 23 and 0 <= mm <= 59):
@@ -228,12 +342,46 @@ def validate(settings_obj: Settings = settings) -> list[str]:
         problems.append("PAPER_SLIPPAGE_RUPEES must be >= 0")
     if settings_obj.paper_cost_rate < 0:
         problems.append("PAPER_COST_RATE must be >= 0")
+    for name, value in (
+        ("PAPER_BROKERAGE_PER_ORDER", settings_obj.paper_brokerage_per_order),
+        ("PAPER_BROKERAGE_RATE", settings_obj.paper_brokerage_rate),
+        ("PAPER_STT_SELL_RATE", settings_obj.paper_stt_sell_rate),
+        ("PAPER_EXCHANGE_CHARGE_RATE", settings_obj.paper_exchange_charge_rate),
+        ("PAPER_SEBI_CHARGE_RATE", settings_obj.paper_sebi_charge_rate),
+        ("PAPER_STAMP_DUTY_BUY_RATE", settings_obj.paper_stamp_duty_buy_rate),
+        ("PAPER_GST_RATE", settings_obj.paper_gst_rate),
+    ):
+        if value < 0:
+            problems.append(f"{name} must be >= 0")
+    if settings_obj.paper_profit_withdrawal_threshold < 0:
+        problems.append("PAPER_PROFIT_WITHDRAWAL_THRESHOLD must be >= 0")
+    if not 1 <= settings_obj.paper_default_stop_loss_pct <= 50:
+        problems.append("PAPER_DEFAULT_STOP_LOSS_PCT must be between 1 and 50")
+    if settings_obj.paper_min_option_oi < 0:
+        problems.append("PAPER_MIN_OPTION_OI must be >= 0")
+    if settings_obj.paper_min_option_volume < 0:
+        problems.append("PAPER_MIN_OPTION_VOLUME must be >= 0")
+    if not 0 < settings_obj.paper_max_option_spread_pct <= 20:
+        problems.append("PAPER_MAX_OPTION_SPREAD_PCT must be between 0 and 20")
     if not 0.5 <= settings_obj.min_agent_coverage <= 1.0:
         problems.append("MIN_AGENT_COVERAGE must be between 0.5 and 1.0")
     if not 0.0 <= settings_obj.max_agent_disagreement <= 1.0:
         problems.append("MAX_AGENT_DISAGREEMENT must be between 0.0 and 1.0")
     if settings_obj.paper_monitor_interval_sec < 1:
         problems.append("PAPER_MONITOR_INTERVAL_SEC must be >= 1")
+    if settings_obj.paper_auto_trader_interval_sec < 3:
+        problems.append("PAPER_AUTO_TRADER_INTERVAL_SEC must be >= 3")
+    if not 0 <= settings_obj.paper_auto_trader_min_score <= 100:
+        problems.append("PAPER_AUTO_TRADER_MIN_SCORE must be between 0 and 100")
+    if not 2 <= settings_obj.paper_auto_trader_atm_range <= 20:
+        problems.append("PAPER_AUTO_TRADER_ATM_RANGE must be between 2 and 20")
+    if not 1 <= settings_obj.paper_auto_trader_max_age_sec <= 300:
+        problems.append("PAPER_AUTO_TRADER_MAX_AGE_SEC must be between 1 and 300")
+    grades = {item.strip() for item in settings_obj.paper_auto_trader_grades.split(",") if item.strip()}
+    if not grades or not grades.issubset({"A", "A+"}):
+        problems.append("PAPER_AUTO_TRADER_GRADES must contain only A and/or A+")
+    if settings_obj.paper_auto_trader_enabled and settings_obj.live_orders_enabled:
+        problems.append("PAPER_AUTO_TRADER_ENABLED requires LIVE_ORDERS_ENABLED=false")
     try:
         hh, mm = [int(x) for x in settings_obj.paper_eod_exit_time.split(":", 1)]
         if not (0 <= hh <= 23 and 0 <= mm <= 59):

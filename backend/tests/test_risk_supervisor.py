@@ -18,7 +18,7 @@ def test_risk_supervisor_allows_safe_trade(tmp_path, monkeypatch):
     setup = store.review_trade_setup(setup_id, "APPROVED", "ok")
     decision = evaluate_paper_entry(setup, 100)
     assert decision.approved is True
-    assert decision.max_quantity >= 75
+    assert decision.max_quantity >= settings.nifty_lot_size
 
 
 def test_kill_switch_blocks_trade(tmp_path, monkeypatch):

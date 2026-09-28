@@ -6,11 +6,12 @@ SOURCE_DIR="$(cd "$(dirname "$0")" && pwd)"
 VERSION="$(tr -d '[:space:]' < "$SOURCE_DIR/VERSION")"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 BUILD_ID="${BUILD_ID:-$VERSION-$STAMP}"
-GIT_COMMIT="${GIT_COMMIT:-unknown}"
+GIT_COMMIT="${GIT_COMMIT:-$(git -C "$SOURCE_DIR" rev-parse --short HEAD 2>/dev/null || printf unknown)}"
 APP_ENVIRONMENT="${APP_ENVIRONMENT:-production}"
 RELEASE_DIR="$APP_ROOT/releases/${VERSION}-${STAMP}"
 CURRENT="$APP_ROOT/current"
 PREVIOUS="$(readlink -f "$CURRENT" 2>/dev/null || true)"
+ENV_BACKUP="$(mktemp /tmp/vstradingai-backend-env.XXXXXX)"
 
 [[ $EUID -eq 0 ]] || { echo 'Run with sudo' >&2; exit 1; }
 "$SOURCE_DIR/preflight_aws_lightsail.sh"
@@ -22,23 +23,17 @@ if [[ -n "$PREVIOUS" && -x "$PREVIOUS/backup_aws_lightsail.sh" ]]; then
   APP_DIR="$PREVIOUS" "$PREVIOUS/backup_aws_lightsail.sh" pre-deploy
 fi
 
-rsync -a --exclude='.git/' --exclude='.env' --exclude='.venv/' --exclude='node_modules/' --exclude='dist/' --exclude='__pycache__/' --exclude='.pytest_cache/' --exclude='*.db' --exclude='*.sqlite3' --exclude='*.jsonl' --exclude='*.log' "$SOURCE_DIR/" "$RELEASE_DIR/"
+# Runtime state must never be copied into an immutable release. Excluding the
+# directories themselves also guarantees the following symlinks are created at
+# the intended paths rather than nested as backend/data/data or deployment/deployment.
+rsync -a --exclude='.git/' --exclude='.env' --exclude='.venv/' --exclude='node_modules/' --exclude='dist/' --exclude='__pycache__/' --exclude='.pytest_cache/' --exclude='backend/data/' --exclude='deployment/' --exclude='*.db' --exclude='*.sqlite3' --exclude='*.jsonl' --exclude='*.log' "$SOURCE_DIR/" "$RELEASE_DIR/"
 ln -sfn "$APP_ROOT/shared/data" "$RELEASE_DIR/backend/data"
 ln -sfn "$APP_ROOT/shared/deployment" "$RELEASE_DIR/deployment"
 if [[ ! -f "$APP_ROOT/shared/backend.env" ]]; then
   cp "$RELEASE_DIR/backend/.env.example" "$APP_ROOT/shared/backend.env"
   chmod 600 "$APP_ROOT/shared/backend.env"
 fi
-# Keep the shared environment version aligned without changing secrets.
-if grep -q '^APP_VERSION=' "$APP_ROOT/shared/backend.env"; then
-  sed -i "s/^APP_VERSION=.*/APP_VERSION=$VERSION/" "$APP_ROOT/shared/backend.env"
-else
-  printf '\nAPP_VERSION=%s\n' "$VERSION" >> "$APP_ROOT/shared/backend.env"
-fi
-for pair in "BUILD_ID=$BUILD_ID" "BUILD_TIME=$STAMP" "GIT_COMMIT=$GIT_COMMIT" "APP_ENVIRONMENT=$APP_ENVIRONMENT"; do
-  key="${pair%%=*}"; value="${pair#*=}"
-  if grep -q "^${key}=" "$APP_ROOT/shared/backend.env"; then sed -i "s|^${key}=.*|${key}=${value}|" "$APP_ROOT/shared/backend.env"; else printf '\n%s\n' "$pair" >> "$APP_ROOT/shared/backend.env"; fi
-done
+cp -a "$APP_ROOT/shared/backend.env" "$ENV_BACKUP"
 ln -sfn "$APP_ROOT/shared/backend.env" "$RELEASE_DIR/backend/.env"
 chown -R "$APP_USER:$APP_USER" "$APP_ROOT"
 
@@ -46,6 +41,13 @@ sudo -u "$APP_USER" python3 -m venv "$RELEASE_DIR/backend/.venv"
 sudo -u "$APP_USER" "$RELEASE_DIR/backend/.venv/bin/pip" install --upgrade pip
 sudo -u "$APP_USER" "$RELEASE_DIR/backend/.venv/bin/pip" install -r "$RELEASE_DIR/backend/requirements.lock"
 sudo -u "$APP_USER" bash -lc "cd '$RELEASE_DIR/frontend' && npm install && npm run build"
+
+# Nginx must be able to traverse the immutable release and read the generated
+# SPA. Explicit permissions avoid a 500/internal redirect loop when an archive
+# or deployment umask makes a parent directory private.
+chmod 755 "$APP_ROOT" "$APP_ROOT/releases" "$RELEASE_DIR" "$RELEASE_DIR/frontend"
+find "$RELEASE_DIR/frontend/dist" -type d -exec chmod 755 {} +
+find "$RELEASE_DIR/frontend/dist" -type f -exec chmod 644 {} +
 
 cd "$RELEASE_DIR/backend"
 sudo -u "$APP_USER" env PYTHONPATH=. .venv/bin/python -m compileall -q app
@@ -67,13 +69,25 @@ if [[ -n "$STALE_PID" ]]; then
 fi
 
 # Start candidate on a temporary private port before switching production.
-sudo -u "$APP_USER" bash -lc "cd '$RELEASE_DIR/backend' && set -a && source .env && set +a && export APP_VERSION='$VERSION' && PYTHONPATH=. .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8001 > /tmp/vstradingai-candidate.log 2>&1 & echo \$!" > /tmp/vstradingai-candidate.pid
+sudo -u "$APP_USER" bash -lc "cd '$RELEASE_DIR/backend' && set -a && source .env && set +a && export APP_VERSION='$VERSION' PAPER_AUTO_TRADER_ENABLED=false TRADING_REPORT_SCHEDULER_ENABLED=false && PYTHONPATH=. .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8001 > /tmp/vstradingai-candidate.log 2>&1 & echo \$!" > /tmp/vstradingai-candidate.pid
 CANDIDATE_PID=$(cat /tmp/vstradingai-candidate.pid); trap 'kill "$CANDIDATE_PID" 2>/dev/null || true' EXIT
 for _ in $(seq 1 30); do curl -fsS http://127.0.0.1:8001/healthz >/dev/null && break; sleep 1; done
 curl -fsS http://127.0.0.1:8001/healthz >/dev/null
 CANDIDATE_VERSION=$(curl -fsS http://127.0.0.1:8001/api/system/version | "$RELEASE_DIR/backend/.venv/bin/python" -c 'import json,sys;print(json.load(sys.stdin)["version"])')
 [[ "$CANDIDATE_VERSION" == "$VERSION" ]] || { echo "candidate version mismatch" >&2; exit 1; }
 kill "$CANDIDATE_PID" 2>/dev/null || true; trap - EXIT
+
+# Publish build metadata only after candidate validation. The previous service
+# continues to report its own build metadata if any earlier deployment step fails.
+if grep -q '^APP_VERSION=' "$APP_ROOT/shared/backend.env"; then
+  sed -i "s/^APP_VERSION=.*/APP_VERSION=$VERSION/" "$APP_ROOT/shared/backend.env"
+else
+  printf '\nAPP_VERSION=%s\n' "$VERSION" >> "$APP_ROOT/shared/backend.env"
+fi
+for pair in "BUILD_ID=$BUILD_ID" "BUILD_TIME=$STAMP" "GIT_COMMIT=$GIT_COMMIT" "APP_ENVIRONMENT=$APP_ENVIRONMENT"; do
+  key="${pair%%=*}"; value="${pair#*=}"
+  if grep -q "^${key}=" "$APP_ROOT/shared/backend.env"; then sed -i "s|^${key}=.*|${key}=${value}|" "$APP_ROOT/shared/backend.env"; else printf '\n%s\n' "$pair" >> "$APP_ROOT/shared/backend.env"; fi
+done
 
 ln -sfn "$RELEASE_DIR" "$CURRENT"
 cat >/etc/systemd/system/vstradingai-api.service <<SERVICE
@@ -111,12 +125,28 @@ nginx -t
 systemctl daemon-reload
 systemctl enable vstradingai-api nginx
 systemctl restart vstradingai-api nginx
-sleep 3
-if ! "$CURRENT/post_deploy_smoke_test.sh"; then
-  echo 'Production smoke test failed; rolling back.' >&2
+PRODUCTION_READY=false
+for _ in $(seq 1 30); do
+  if curl -fsS --max-time 3 http://127.0.0.1:8000/healthz >/dev/null 2>&1; then
+    PRODUCTION_READY=true
+    break
+  fi
+  sleep 1
+done
+if [[ "$PRODUCTION_READY" != true ]]; then
+  echo 'Production service did not become ready within 30 seconds; rolling back.' >&2
+  journalctl -u vstradingai-api.service -n 100 --no-pager -l >&2 || true
+  cp -a "$ENV_BACKUP" "$APP_ROOT/shared/backend.env"
   if [[ -n "$PREVIOUS" && -d "$PREVIOUS" ]]; then ln -sfn "$PREVIOUS" "$CURRENT"; systemctl restart vstradingai-api nginx; fi
   exit 1
 fi
+if ! "$CURRENT/post_deploy_smoke_test.sh"; then
+  echo 'Production smoke test failed; rolling back.' >&2
+  cp -a "$ENV_BACKUP" "$APP_ROOT/shared/backend.env"
+  if [[ -n "$PREVIOUS" && -d "$PREVIOUS" ]]; then ln -sfn "$PREVIOUS" "$CURRENT"; systemctl restart vstradingai-api nginx; fi
+  exit 1
+fi
+rm -f "$ENV_BACKUP"
 mkdir -p "$APP_ROOT/shared/deployment/history"
 printf '{"ok":true,"version":"%s","completed_at":"%s","release":"%s"}\n' "$VERSION" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$RELEASE_DIR" > "$APP_ROOT/shared/deployment/last_smoke_test.json"
 printf '%s version=%s release=%s previous=%s result=success\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$VERSION" "$RELEASE_DIR" "${PREVIOUS:-none}" >> "$APP_ROOT/shared/deployment/history/deployments.log"

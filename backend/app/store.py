@@ -314,10 +314,12 @@ def open_paper_trade(setup_id: int, quantity: int, entry_price: float, slippage_
     with _conn() as conn:
         cur = conn.execute(
             """INSERT INTO paper_trades (setup_id, trading_day, option_type, strike, quantity,
-               entry_price, stop_loss, target_1, target_2, opened_at, status)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN')""",
+               entry_price, entry_reference, entry_slippage, stop_loss, target_1, target_2,
+               opened_at, status)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN')""",
             (setup_id, _today(), setup["option_type"], setup["strike"], quantity, effective_entry,
-             setup["stop_loss"], setup["target_1"], setup["target_2"], datetime.now(timezone.utc).isoformat()),
+             entry_price, round(effective_entry - entry_price, 2), setup["stop_loss"],
+             setup["target_1"], setup["target_2"], datetime.now(timezone.utc).isoformat()),
         )
         conn.execute("UPDATE trade_setups SET status = 'PAPER_OPEN' WHERE id = ?", (setup_id,))
         return cur.lastrowid
@@ -327,6 +329,75 @@ def get_open_paper_trade() -> dict | None:
     with _conn() as conn:
         row = conn.execute("SELECT * FROM paper_trades WHERE status = 'OPEN' ORDER BY id DESC LIMIT 1").fetchone()
         return dict(row) if row else None
+
+
+def latest_closed_paper_trade() -> dict | None:
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM paper_trades WHERE status != 'OPEN' ORDER BY closed_at DESC, id DESC LIMIT 1"
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def record_paper_automation_run(action: str, reason: str | None = None,
+                                setup_id: int | None = None, trade_id: int | None = None,
+                                details: dict | None = None, cycle_key: str | None = None) -> int:
+    checked_at = datetime.now(timezone.utc).isoformat()
+    with _conn() as conn:
+        cur = conn.execute(
+            """INSERT INTO paper_automation_runs
+               (checked_at, trading_day, cycle_key, action, reason, setup_id, trade_id, details_json)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (checked_at, _today(), cycle_key, action, reason, setup_id, trade_id,
+             json.dumps(details or {}, default=str, separators=(",", ":"))),
+        )
+        return cur.lastrowid
+
+
+def list_paper_automation_runs(limit: int = 50) -> list[dict]:
+    limit = max(1, min(limit, 200))
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM paper_automation_runs ORDER BY id DESC LIMIT ?", (limit,)
+        ).fetchall()
+    result = []
+    for row in rows:
+        item = dict(row)
+        try:
+            item["details"] = json.loads(item.pop("details_json"))
+        except (TypeError, json.JSONDecodeError):
+            item["details"] = {}
+            item.pop("details_json", None)
+        result.append(item)
+    return result
+
+
+def paper_automation_summary(trading_day: str | None = None) -> dict:
+    """Return restart-safe automation totals from SQLite."""
+    day = trading_day or _today()
+    with _conn() as conn:
+        rows = conn.execute(
+            """SELECT action, COUNT(*) AS count
+               FROM paper_automation_runs WHERE trading_day = ? GROUP BY action""",
+            (day,),
+        ).fetchall()
+    counts = {row["action"]: row["count"] for row in rows}
+    return {
+        "trading_day": day,
+        "recorded_cycles": sum(counts.values()),
+        "paper_trades_opened": counts.get("PAPER_TRADE_OPENED", 0),
+        "blocked": counts.get("BLOCKED", 0),
+        "no_trade": counts.get("NO_TRADE", 0),
+        "actions": counts,
+    }
+
+
+def has_paper_automation_cycle(cycle_key: str) -> bool:
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT 1 FROM paper_automation_runs WHERE cycle_key = ? LIMIT 1", (cycle_key,)
+        ).fetchone()
+        return row is not None
 
 
 def list_paper_trades(trading_day: str | None = None, status: str | None = None, limit: int = 50) -> list[dict]:
